@@ -1,12 +1,25 @@
+from __future__ import annotations
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.permission import Permission
 from app.repo.permissions import PermissionRepo
+from app.schemas.pagination import PageParams
 from app.schemas.permission import PermissionCreate, PermissionUpdate
 
 
-def list_permissions(db: Session) -> list[Permission]:
+def list_permissions(db: Session, params: PageParams) -> tuple[list[Permission], int]:
+    return PermissionRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
+
+
+def list_permissions_all(db: Session) -> list[Permission]:
     return PermissionRepo(db).list()
 
 

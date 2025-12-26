@@ -1,12 +1,18 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type {
   Permission,
   PermissionCreate,
   PermissionUpdate,
 } from "../types/rbac";
 
-export async function listPermissions() {
-  const { data } = await http.get<Permission[]>("/permissions");
+export async function listPermissions(params: ListParams) {
+  const { data } = await http.get<Page<Permission>>("/permissions", { params });
+  return data;
+}
+
+export async function listPermissionsAll() {
+  const { data } = await http.get<Permission[]>("/permissions/all");
   return data;
 }
 

@@ -1,8 +1,14 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type { Rule, RuleCreate, RuleUpdate } from "../types/domain";
 
-export async function listRules() {
-  const { data } = await http.get<Rule[]>("/rules");
+export async function listRules(params: ListParams) {
+  const { data } = await http.get<Page<Rule>>("/rules", { params });
+  return data;
+}
+
+export async function listRulesAll() {
+  const { data } = await http.get<Rule[]>("/rules/all");
   return data;
 }
 

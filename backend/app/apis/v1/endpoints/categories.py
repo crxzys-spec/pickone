@@ -9,6 +9,7 @@ from app.schemas.category import (
     CategoryTreeOut,
     CategoryUpdate,
 )
+from app.schemas.pagination import Page, PageParams
 from app.schemas.subcategory import SubcategoryCreate, SubcategoryOut, SubcategoryUpdate
 from app.services import categories as category_service
 
@@ -18,13 +19,15 @@ router = APIRouter()
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["category:read"]))],
-    response_model=list[CategoryOut],
+    response_model=Page[CategoryOut],
 )
 def list_categories(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return category_service.list_categories(db)
+    items, total = category_service.list_categories(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 @router.get(
@@ -84,14 +87,16 @@ def delete_category(
 @router.get(
     "/{category_id}/subcategories",
     dependencies=[Depends(require_scopes(["subcategory:read"]))],
-    response_model=list[SubcategoryOut],
+    response_model=Page[SubcategoryOut],
 )
 def list_subcategories(
     category_id: int,
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return category_service.list_subcategories(db, category_id)
+    items, total = category_service.list_subcategories(db, category_id, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 @router.post(

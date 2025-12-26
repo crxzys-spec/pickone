@@ -5,12 +5,31 @@ from sqlalchemy.orm import selectinload
 
 from app.models.role import Role
 from app.repo.base import BaseRepo
+from app.repo.utils import apply_keyword, apply_sort, paginate
 
 
 class RoleRepo(BaseRepo):
     def list(self) -> list[Role]:
         stmt = select(Role).options(selectinload(Role.permissions)).order_by(Role.id)
         return list(self.db.execute(stmt).scalars().all())
+
+    def list_page(
+        self,
+        keyword: str | None,
+        sort_by: str | None,
+        sort_order: str,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[Role], int]:
+        stmt = select(Role).options(selectinload(Role.permissions))
+        stmt = apply_keyword(stmt, keyword, [Role.name, Role.description])
+        sort_map = {
+            "id": Role.id,
+            "name": Role.name,
+            "description": Role.description,
+        }
+        stmt = apply_sort(stmt, sort_by, sort_order, sort_map, Role.id)
+        return paginate(self.db, stmt, page, page_size)
 
     def get_by_id(self, role_id: int) -> Role | None:
         stmt = (

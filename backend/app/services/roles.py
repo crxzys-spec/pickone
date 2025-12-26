@@ -1,13 +1,26 @@
+from __future__ import annotations
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.role import Role
 from app.repo.permissions import PermissionRepo
 from app.repo.roles import RoleRepo
+from app.schemas.pagination import PageParams
 from app.schemas.role import RoleCreate, RolePermissionsUpdate, RoleUpdate
 
 
-def list_roles(db: Session) -> list[Role]:
+def list_roles(db: Session, params: PageParams) -> tuple[list[Role], int]:
+    return RoleRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
+
+
+def list_roles_all(db: Session) -> list[Role]:
     return RoleRepo(db).list()
 
 

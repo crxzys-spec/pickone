@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
+from app.schemas.pagination import Page, PageParams
 from app.schemas.title import TitleCreate, TitleOut, TitleUpdate
 from app.services import titles as title_service
 
@@ -12,13 +13,27 @@ router = APIRouter()
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["title:read"]))],
-    response_model=list[TitleOut],
+    response_model=Page[TitleOut],
 )
 def list_titles(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return title_service.list_titles(db)
+    items, total = title_service.list_titles(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
+
+
+@router.get(
+    "/all",
+    dependencies=[Depends(require_scopes(["title:read"]))],
+    response_model=list[TitleOut],
+)
+def list_titles_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return title_service.list_titles_all(db)
 
 
 @router.post(

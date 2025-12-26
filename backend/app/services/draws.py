@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 
 from fastapi import HTTPException, status
@@ -8,7 +10,9 @@ from app.models.draw import DrawApplication, DrawResult
 from app.models.expert import Expert
 from app.repo.draws import DrawRepo
 from app.repo.rules import RuleRepo
+from app.repo.utils import apply_keyword, apply_sort, paginate
 from app.services import categories as category_service
+from app.schemas.pagination import PageParams
 from app.schemas.draw import DrawApply, DrawUpdate
 
 SUPPORTED_DRAW_METHODS = {"random", "lottery"}
@@ -37,8 +41,14 @@ def pick_experts(
     )
 
 
-def list_draws(db: Session) -> list[DrawApplication]:
-    return DrawRepo(db).list()
+def list_draws(db: Session, params: PageParams) -> tuple[list[DrawApplication], int]:
+    return DrawRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
 
 
 def get_draw(db: Session, draw_id: int) -> DrawApplication:
@@ -209,6 +219,37 @@ def list_results(db: Session, draw_id: int) -> list[DrawResult]:
         .order_by(DrawResult.is_backup, DrawResult.ordinal)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+def list_results_page(
+    db: Session, draw_id: int, params: PageParams
+) -> tuple[list[DrawResult], int]:
+    _ = get_draw(db, draw_id)
+    stmt = (
+        select(DrawResult)
+        .where(DrawResult.draw_id == draw_id)
+        .options(selectinload(DrawResult.expert))
+    )
+    if params.keyword:
+        stmt = stmt.join(Expert, Expert.id == DrawResult.expert_id, isouter=True)
+        stmt = apply_keyword(
+            stmt,
+            params.keyword,
+            [Expert.name, Expert.company, Expert.phone, Expert.email],
+        )
+    sort_map = {
+        "id": DrawResult.id,
+        "ordinal": DrawResult.ordinal,
+        "is_backup": DrawResult.is_backup,
+        "is_replacement": DrawResult.is_replacement,
+    }
+    if params.sort_by:
+        stmt = apply_sort(
+            stmt, params.sort_by, params.sort_order, sort_map, DrawResult.id
+        )
+    else:
+        stmt = stmt.order_by(DrawResult.is_backup, DrawResult.ordinal, DrawResult.id)
+    return paginate(db, stmt, params.page, params.page_size)
 
 
 def execute_draw(db: Session, draw_id: int) -> list[DrawResult]:

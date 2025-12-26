@@ -12,6 +12,7 @@ from app.models.rule import Rule
 from app.models.subcategory import Subcategory
 from app.repo.categories import CategoryRepo
 from app.repo.subcategories import SubcategoryRepo
+from app.schemas.pagination import PageParams
 from app.schemas.category import CategoryCreate, CategoryUpdate
 from app.schemas.subcategory import SubcategoryCreate, SubcategoryUpdate
 
@@ -23,12 +24,22 @@ def _generate_unique_code(repo, prefix: str) -> str:
     return code
 
 
-def list_categories(db: Session) -> list[Category]:
+def list_categories(db: Session, params: PageParams) -> tuple[list[Category], int]:
+    return CategoryRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
+
+
+def list_categories_all(db: Session) -> list[Category]:
     return CategoryRepo(db).list()
 
 
 def list_category_tree(db: Session) -> list[Category]:
-    categories = CategoryRepo(db).list()
+    categories = list_categories_all(db)
     subcategories = SubcategoryRepo(db).list()
     grouped: dict[int, list[Subcategory]] = {}
     for subcategory in subcategories:
@@ -155,9 +166,18 @@ def delete_category(db: Session, category_id: int) -> None:
     db.commit()
 
 
-def list_subcategories(db: Session, category_id: int) -> list[Subcategory]:
+def list_subcategories(
+    db: Session, category_id: int, params: PageParams
+) -> tuple[list[Subcategory], int]:
     _ = get_category(db, category_id)
-    return SubcategoryRepo(db).list_by_category(category_id)
+    return SubcategoryRepo(db).list_page(
+        category_id,
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
 
 
 def get_subcategory(db: Session, subcategory_id: int) -> Subcategory:

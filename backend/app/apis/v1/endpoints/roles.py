@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
+from app.schemas.pagination import Page, PageParams
 from app.schemas.role import RoleCreate, RoleOut, RolePermissionsUpdate, RoleUpdate
 from app.services import roles as role_service
 
@@ -12,13 +13,27 @@ router = APIRouter()
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["role:write"]))],
-    response_model=list[RoleOut],
+    response_model=Page[RoleOut],
 )
 def list_roles(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return role_service.list_roles(db)
+    items, total = role_service.list_roles(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
+
+
+@router.get(
+    "/all",
+    dependencies=[Depends(require_scopes(["role:write"]))],
+    response_model=list[RoleOut],
+)
+def list_roles_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return role_service.list_roles_all(db)
 
 
 @router.post(

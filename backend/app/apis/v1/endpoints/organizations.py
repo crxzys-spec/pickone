@@ -8,6 +8,7 @@ from app.schemas.organization import (
     OrganizationOut,
     OrganizationUpdate,
 )
+from app.schemas.pagination import Page, PageParams
 from app.services import organizations as organization_service
 
 router = APIRouter()
@@ -16,13 +17,27 @@ router = APIRouter()
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["organization:read"]))],
-    response_model=list[OrganizationOut],
+    response_model=Page[OrganizationOut],
 )
 def list_organizations(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return organization_service.list_organizations(db)
+    items, total = organization_service.list_organizations(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
+
+
+@router.get(
+    "/all",
+    dependencies=[Depends(require_scopes(["organization:read"]))],
+    response_model=list[OrganizationOut],
+)
+def list_organizations_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return organization_service.list_organizations_all(db)
 
 
 @router.post(

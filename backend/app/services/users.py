@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -5,6 +7,7 @@ from app.core.security import get_password_hash, verify_password
 from app.models.user import User
 from app.repo.roles import RoleRepo
 from app.repo.users import UserRepo
+from app.schemas.pagination import PageParams
 from app.schemas.user import (
     UserCreate,
     UserPasswordChange,
@@ -14,8 +17,14 @@ from app.schemas.user import (
 )
 
 
-def list_users(db: Session) -> list[User]:
-    return UserRepo(db).list()
+def list_users(db: Session, params: PageParams) -> tuple[list[User], int]:
+    return UserRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
 
 
 def get_user(db: Session, user_id: int) -> User:

@@ -1,8 +1,14 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type { Title, TitleCreate, TitleUpdate } from "../types/domain";
 
-export async function listTitles() {
-  const { data } = await http.get<Title[]>("/titles");
+export async function listTitles(params: ListParams) {
+  const { data } = await http.get<Page<Title>>("/titles", { params });
+  return data;
+}
+
+export async function listTitlesAll() {
+  const { data } = await http.get<Title[]>("/titles/all");
   return data;
 }
 

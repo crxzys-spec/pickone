@@ -1,17 +1,17 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import HomeView from "../views/Home.vue";
-import LoginView from "../views/Login.vue";
-import AdminLayout from "../views/admin/AdminLayout.vue";
-import DrawsAdmin from "../views/admin/DrawsAdmin.vue";
-import ExpertsAdmin from "../views/admin/ExpertsAdmin.vue";
-import OrganizationsAdmin from "../views/admin/OrganizationsAdmin.vue";
-import PermissionsAdmin from "../views/admin/PermissionsAdmin.vue";
-import RolesAdmin from "../views/admin/RolesAdmin.vue";
-import UsersAdmin from "../views/admin/UsersAdmin.vue";
-import RulesAdmin from "../views/admin/RulesAdmin.vue";
-import CategoriesAdmin from "../views/admin/CategoriesAdmin.vue";
-import TitlesAdmin from "../views/admin/TitlesAdmin.vue";
+const HomeView = () => import("../views/Home.vue");
+const LoginView = () => import("../views/Login.vue");
+const AdminLayout = () => import("../views/admin/AdminLayout.vue");
+const DrawsAdmin = () => import("../views/admin/DrawsAdmin.vue");
+const ExpertsAdmin = () => import("../views/admin/ExpertsAdmin.vue");
+const OrganizationsAdmin = () => import("../views/admin/OrganizationsAdmin.vue");
+const PermissionsAdmin = () => import("../views/admin/PermissionsAdmin.vue");
+const RolesAdmin = () => import("../views/admin/RolesAdmin.vue");
+const UsersAdmin = () => import("../views/admin/UsersAdmin.vue");
+const RulesAdmin = () => import("../views/admin/RulesAdmin.vue");
+const CategoriesAdmin = () => import("../views/admin/CategoriesAdmin.vue");
+const TitlesAdmin = () => import("../views/admin/TitlesAdmin.vue");
 
 const routes = [
   {

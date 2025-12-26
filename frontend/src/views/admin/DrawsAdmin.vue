@@ -16,34 +16,44 @@
     </div>
 
     <el-table
-      :data="filteredDraws"
+      :data="draws"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('draws.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('draws.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('draws.columns.category')"
         prop="category"
         min-width="140"
+        sortable="custom"
       />
       <el-table-column
         :label="t('draws.columns.subcategory')"
         prop="subcategory"
         min-width="140"
+        sortable="custom"
       />
       <el-table-column
         :label="t('draws.columns.count')"
         prop="expert_count"
         width="90"
+        sortable="custom"
       />
       <el-table-column
         :label="t('draws.columns.backup')"
         prop="backup_count"
         width="90"
+        sortable="custom"
       />
-      <el-table-column :label="t('draws.columns.method')" width="120">
+      <el-table-column :label="t('draws.columns.method')" width="120" prop="draw_method" sortable="custom">
         <template #default="{ row }">
           {{ methodLabel(row.draw_method) }}
         </template>
@@ -52,18 +62,20 @@
         :label="t('draws.columns.reviewTime')"
         prop="review_time"
         min-width="170"
+        sortable="custom"
       />
       <el-table-column
         :label="t('draws.columns.location')"
         prop="review_location"
         min-width="160"
+        sortable="custom"
       />
-      <el-table-column :label="t('draws.columns.status')" width="120">
+      <el-table-column :label="t('draws.columns.status')" width="120" prop="status" sortable="custom">
         <template #default="{ row }">
           {{ statusLabel(row.status) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('draws.columns.rule')" prop="rule_id" width="90" />
+      <el-table-column :label="t('draws.columns.rule')" prop="rule_id" width="90" sortable="custom" />
       <el-table-column :label="t('draws.columns.actions')" width="280" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">
@@ -86,6 +98,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px">
@@ -147,9 +171,17 @@
     :title="t('draws.results.title')"
     width="760px"
   >
-    <el-table :data="results" border stripe>
-      <el-table-column :label="t('draws.results.columns.order')" prop="ordinal" width="80" />
-      <el-table-column :label="t('draws.results.columns.backup')" width="100">
+    <div class="results-toolbar">
+      <el-input
+        v-model="resultsKeyword"
+        :placeholder="t('experts.searchPlaceholder')"
+        clearable
+        class="search"
+      />
+    </div>
+    <el-table :data="results" border stripe @sort-change="handleResultsSortChange">
+      <el-table-column :label="t('draws.results.columns.order')" prop="ordinal" width="80" sortable="custom" />
+      <el-table-column :label="t('draws.results.columns.backup')" width="100" prop="is_backup" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.is_backup ? 'warning' : 'success'">
             {{ row.is_backup ? t("common.yes") : t("common.no") }}
@@ -199,6 +231,17 @@
         </template>
       </el-table-column>
     </el-table>
+    <div class="pager results-pager">
+      <el-pagination
+        v-model:current-page="resultsPage"
+        v-model:page-size="resultsPageSize"
+        :total="resultsTotal"
+        :page-sizes="[10, 20, 50]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handleResultsPageChange"
+        @size-change="handleResultsPageSizeChange"
+      />
+    </div>
     <template #footer>
       <el-button @click="resultsVisible = false">
         {{ t("common.cancel") }}
@@ -209,7 +252,7 @@
 
 <script setup lang="ts">
 import axios from "axios";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 
@@ -222,7 +265,7 @@ import {
   replaceDrawResult,
   updateDraw,
 } from "../../services/draws";
-import { listRules } from "../../services/rules";
+import { listRulesAll } from "../../services/rules";
 import type {
   DrawApplication,
   DrawResultOut,
@@ -243,6 +286,11 @@ const draws = ref<DrawApplication[]>([]);
 const rules = ref<Rule[]>([]);
 const loading = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const dialogVisible = ref(false);
@@ -250,6 +298,13 @@ const isEditing = ref(false);
 const editingId = ref<number | null>(null);
 const resultsVisible = ref(false);
 const results = ref<DrawResultOut[]>([]);
+const resultsKeyword = ref("");
+const resultsPage = ref(1);
+const resultsPageSize = ref(10);
+const resultsTotal = ref(0);
+const resultsSortBy = ref<string | undefined>();
+const resultsSortOrder = ref<"asc" | "desc" | undefined>();
+const hasBackup = ref(false);
 const activeDrawId = ref<number | null>(null);
 
 const form = reactive<DrawForm>({
@@ -266,25 +321,28 @@ const dialogTitle = computed(() =>
   isEditing.value ? t("draws.dialog.edit") : t("draws.dialog.new"),
 );
 
-const filteredDraws = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return draws.value;
+let keywordTimer: number | undefined;
+let resultsKeywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return draws.value.filter((draw) => {
-    const location = draw.review_location ?? "";
-    const category = draw.category ?? "";
-    return (
-      category.toLowerCase().includes(key) ||
-      location.toLowerCase().includes(key) ||
-      draw.status.toLowerCase().includes(key)
-    );
-  });
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
 });
 
-const hasBackup = computed(() =>
-  results.value.some((item) => item.is_backup),
-);
+watch(resultsKeyword, () => {
+  if (resultsKeywordTimer) {
+    window.clearTimeout(resultsKeywordTimer);
+  }
+  resultsKeywordTimer = window.setTimeout(() => {
+    resultsPage.value = 1;
+    refreshResults();
+  }, 300);
+});
 
 function resetForm() {
   form.expert_count = 1;
@@ -349,14 +407,47 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 async function refresh() {
   loading.value = true;
   try {
-    draws.value = await listDraws();
+    const result = await listDraws({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    draws.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
 }
 
 async function refreshRules() {
-  rules.value = await listRules();
+  rules.value = await listRulesAll();
+}
+
+async function refreshResults() {
+  if (!activeDrawId.value) {
+    return;
+  }
+  const result = await listDrawResults(activeDrawId.value, {
+    page: resultsPage.value,
+    page_size: resultsPageSize.value,
+    sort_by: resultsSortBy.value,
+    sort_order: resultsSortOrder.value,
+    keyword: resultsKeyword.value.trim() || undefined,
+  });
+  results.value = result.items;
+  resultsTotal.value = result.total;
+  hasBackup.value = result.items.some((item) => item.is_backup);
+  if (!hasBackup.value && result.total > result.items.length) {
+    const backupCheck = await listDrawResults(activeDrawId.value, {
+      page: 1,
+      page_size: 1,
+      sort_by: "is_backup",
+      sort_order: "desc",
+    });
+    hasBackup.value = backupCheck.items.some((item) => item.is_backup);
+  }
 }
 
 function openCreate() {
@@ -440,9 +531,13 @@ async function confirmExecute(draw: DrawApplication) {
     return;
   }
   try {
-    results.value = await executeDraw(draw.id);
+    await executeDraw(draw.id);
     resultsVisible.value = true;
     activeDrawId.value = draw.id;
+    resultsPage.value = 1;
+    resultsSortBy.value = undefined;
+    resultsSortOrder.value = undefined;
+    await refreshResults();
     await refresh();
   } catch (error) {
     ElMessage.error(resolveErrorMessage(error, t("draws.messages.executeFailed")));
@@ -451,9 +546,12 @@ async function confirmExecute(draw: DrawApplication) {
 
 async function openResults(draw: DrawApplication) {
   try {
-    results.value = await listDrawResults(draw.id);
-    resultsVisible.value = true;
     activeDrawId.value = draw.id;
+    resultsPage.value = 1;
+    resultsSortBy.value = undefined;
+    resultsSortOrder.value = undefined;
+    await refreshResults();
+    resultsVisible.value = true;
   } catch (error) {
     ElMessage.error(t("draws.messages.resultsFailed"));
   }
@@ -476,7 +574,8 @@ async function confirmReplace(result: DrawResultOut) {
   }
 
   try {
-    results.value = await replaceDrawResult(activeDrawId.value, result.id);
+    await replaceDrawResult(activeDrawId.value, result.id);
+    await refreshResults();
     ElMessage.success(t("draws.messages.replaceSuccess"));
   } catch (error) {
     ElMessage.error(t("draws.messages.replaceFailed"));
@@ -486,6 +585,64 @@ async function confirmReplace(result: DrawResultOut) {
 onMounted(async () => {
   await Promise.all([refresh(), refreshRules()]);
 });
+
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
+
+function handleResultsSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    resultsSortBy.value = undefined;
+    resultsSortOrder.value = undefined;
+  } else {
+    resultsSortBy.value = prop;
+    resultsSortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  resultsPage.value = 1;
+  refreshResults();
+}
+
+function handleResultsPageChange(value: number) {
+  resultsPage.value = value;
+  refreshResults();
+}
+
+function handleResultsPageSizeChange(value: number) {
+  resultsPageSize.value = value;
+  resultsPage.value = 1;
+  refreshResults();
+}
 </script>
 
 <style scoped>
@@ -543,5 +700,21 @@ onMounted(async () => {
 
 .muted {
   color: #9aa3b2;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.results-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.results-pager {
+  margin-top: 12px;
 }
 </style>

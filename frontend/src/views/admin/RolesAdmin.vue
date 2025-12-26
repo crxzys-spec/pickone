@@ -16,22 +16,30 @@
     </div>
 
     <el-table
-      :data="filteredRoles"
+      :data="roles"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('roles.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('roles.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('roles.columns.name')"
         prop="name"
         min-width="160"
+        sortable="custom"
       />
       <el-table-column
         :label="t('roles.columns.description')"
         prop="description"
         min-width="220"
+        sortable="custom"
       />
       <el-table-column :label="t('roles.columns.permissions')" min-width="260">
         <template #default="{ row }">
@@ -59,6 +67,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog v-model="roleDialogVisible" :title="dialogTitle" width="520px">
@@ -114,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 
@@ -123,9 +143,10 @@ import {
   createRole,
   deleteRole,
   listRoles,
+  listRolesAll,
   updateRole,
 } from "../../services/roles";
-import { listPermissions } from "../../services/permissions";
+import { listPermissionsAll } from "../../services/permissions";
 import type { Permission, Role } from "../../types/rbac";
 
 interface RoleForm {
@@ -137,6 +158,11 @@ const roles = ref<Role[]>([]);
 const permissions = ref<Permission[]>([]);
 const loading = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const roleDialogVisible = ref(false);
@@ -158,12 +184,16 @@ const dialogTitle = computed(() =>
   isEditing.value ? t("roles.dialog.edit") : t("roles.dialog.new"),
 );
 
-const filteredRoles = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return roles.value;
+let keywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return roles.value.filter((role) => role.name.toLowerCase().includes(key));
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
 });
 
 function resetForm() {
@@ -174,14 +204,22 @@ function resetForm() {
 async function refresh() {
   loading.value = true;
   try {
-    roles.value = await listRoles();
+    const result = await listRoles({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    roles.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
 }
 
 async function refreshPermissions() {
-  permissions.value = await listPermissions();
+  permissions.value = await listPermissionsAll();
 }
 
 function openCreate() {
@@ -261,6 +299,35 @@ async function confirmDelete(role: Role) {
 onMounted(async () => {
   await Promise.all([refresh(), refreshPermissions()]);
 });
+
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
 </script>
 
 <style scoped>
@@ -319,5 +386,11 @@ onMounted(async () => {
 
 .muted {
   color: #9aa3b2;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

@@ -16,27 +16,36 @@
     </div>
 
     <el-table
-      :data="filteredPermissions"
+      :data="permissions"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('permissions.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('permissions.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('permissions.columns.name')"
         prop="name"
         min-width="180"
+        sortable="custom"
       />
       <el-table-column
         :label="t('permissions.columns.scope')"
         prop="scope"
         min-width="200"
+        sortable="custom"
       />
       <el-table-column
         :label="t('permissions.columns.description')"
         prop="description"
         min-width="220"
+        sortable="custom"
       />
       <el-table-column :label="t('permissions.columns.actions')" width="200" fixed="right">
         <template #default="{ row }">
@@ -49,6 +58,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog
@@ -79,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 
@@ -100,6 +121,11 @@ interface PermissionForm {
 const permissions = ref<Permission[]>([]);
 const loading = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const permissionDialogVisible = ref(false);
@@ -116,14 +142,16 @@ const dialogTitle = computed(() =>
   isEditing.value ? t("permissions.dialog.edit") : t("permissions.dialog.new"),
 );
 
-const filteredPermissions = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return permissions.value;
+let keywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return permissions.value.filter((permission) =>
-    permission.scope.toLowerCase().includes(key),
-  );
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
 });
 
 function resetForm() {
@@ -135,7 +163,15 @@ function resetForm() {
 async function refresh() {
   loading.value = true;
   try {
-    permissions.value = await listPermissions();
+    const result = await listPermissions({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    permissions.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
@@ -197,6 +233,35 @@ async function confirmDelete(permission: Permission) {
 }
 
 onMounted(refresh);
+
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
 </script>
 
 <style scoped>
@@ -246,5 +311,11 @@ onMounted(refresh);
 
 .table {
   width: 100%;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

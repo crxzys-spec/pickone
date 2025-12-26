@@ -1,13 +1,26 @@
+from __future__ import annotations
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.rule import Rule
 from app.repo.rules import RuleRepo
+from app.schemas.pagination import PageParams
 from app.services import categories as category_service
 from app.schemas.rule import RuleCreate, RuleUpdate
 
 
-def list_rules(db: Session) -> list[Rule]:
+def list_rules(db: Session, params: PageParams) -> tuple[list[Rule], int]:
+    return RuleRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
+
+
+def list_rules_all(db: Session) -> list[Rule]:
     return RuleRepo(db).list()
 
 

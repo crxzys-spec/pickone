@@ -1,4 +1,5 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type {
   DrawApplication,
   DrawApply,
@@ -6,8 +7,8 @@ import type {
   DrawUpdate,
 } from "../types/domain";
 
-export async function listDraws() {
-  const { data } = await http.get<DrawApplication[]>("/draws");
+export async function listDraws(params: ListParams) {
+  const { data } = await http.get<Page<DrawApplication>>("/draws", { params });
   return data;
 }
 
@@ -35,8 +36,11 @@ export async function executeDraw(drawId: number) {
   return data;
 }
 
-export async function listDrawResults(drawId: number) {
-  const { data } = await http.get<DrawResultOut[]>(`/draws/${drawId}/results`);
+export async function listDrawResults(drawId: number, params: ListParams) {
+  const { data } = await http.get<Page<DrawResultOut>>(
+    `/draws/${drawId}/results`,
+    { params },
+  );
   return data;
 }
 

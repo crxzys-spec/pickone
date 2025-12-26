@@ -16,36 +16,45 @@
     </div>
 
     <el-table
-      :data="filteredUsers"
+      :data="users"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('users.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('users.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('users.columns.username')"
         prop="username"
         min-width="160"
+        sortable="custom"
       />
       <el-table-column
         :label="t('users.columns.name')"
         prop="full_name"
         min-width="160"
+        sortable="custom"
       />
       <el-table-column
         :label="t('users.columns.email')"
         prop="email"
         min-width="200"
+        sortable="custom"
       />
-      <el-table-column :label="t('users.columns.active')" width="100">
+      <el-table-column :label="t('users.columns.active')" width="100" prop="is_active" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
             {{ row.is_active ? t("common.yes") : t("common.no") }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('users.columns.superuser')" width="120">
+      <el-table-column :label="t('users.columns.superuser')" width="120" prop="is_superuser" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.is_superuser ? 'warning' : 'info'">
             {{ row.is_superuser ? t("common.yes") : t("common.no") }}
@@ -78,6 +87,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog v-model="userDialogVisible" :title="dialogTitle" width="520px">
@@ -145,11 +166,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 
-import { listRoles } from "../../services/roles";
+import { listRolesAll } from "../../services/roles";
 import {
   assignUserRoles,
   createUser,
@@ -172,6 +193,11 @@ const users = ref<User[]>([]);
 const roles = ref<Role[]>([]);
 const loading = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const userDialogVisible = ref(false);
@@ -197,20 +223,16 @@ const dialogTitle = computed(() =>
   isEditing.value ? t("users.dialog.edit") : t("users.dialog.new"),
 );
 
-const filteredUsers = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return users.value;
+let keywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return users.value.filter((user) => {
-    const fullName = user.full_name ?? "";
-    const email = user.email ?? "";
-    return (
-      user.username.toLowerCase().includes(key) ||
-      fullName.toLowerCase().includes(key) ||
-      email.toLowerCase().includes(key)
-    );
-  });
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
 });
 
 function resetForm() {
@@ -225,14 +247,22 @@ function resetForm() {
 async function refresh() {
   loading.value = true;
   try {
-    users.value = await listUsers();
+    const result = await listUsers({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    users.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
 }
 
 async function refreshRoles() {
-  roles.value = await listRoles();
+  roles.value = await listRolesAll();
 }
 
 function openCreate() {
@@ -322,6 +352,35 @@ async function confirmDelete(user: User) {
 onMounted(async () => {
   await Promise.all([refresh(), refreshRoles()]);
 });
+
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
 </script>
 
 <style scoped>
@@ -371,6 +430,12 @@ onMounted(async () => {
 
 .table {
   width: 100%;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .tag {

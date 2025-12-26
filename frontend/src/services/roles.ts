@@ -1,8 +1,14 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type { Role, RoleCreate, RolePermissionsUpdate, RoleUpdate } from "../types/rbac";
 
-export async function listRoles() {
-  const { data } = await http.get<Role[]>("/roles");
+export async function listRoles(params: ListParams) {
+  const { data } = await http.get<Page<Role>>("/roles", { params });
+  return data;
+}
+
+export async function listRolesAll() {
+  const { data } = await http.get<Role[]>("/roles/all");
   return data;
 }
 

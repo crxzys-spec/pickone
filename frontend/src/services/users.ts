@@ -1,4 +1,5 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type {
   User,
   UserCreate,
@@ -8,8 +9,8 @@ import type {
   UserUpdate,
 } from "../types/rbac";
 
-export async function listUsers() {
-  const { data } = await http.get<User[]>("/users");
+export async function listUsers(params: ListParams) {
+  const { data } = await http.get<Page<User>>("/users", { params });
   return data;
 }
 

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
+from app.schemas.pagination import Page, PageParams
 from app.schemas.user import (
     UserCreate,
     UserOut,
@@ -54,13 +55,15 @@ def change_password(
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["user:read"]))],
-    response_model=list[UserOut],
+    response_model=Page[UserOut],
 )
 def list_users(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return user_service.list_users(db)
+    items, total = user_service.list_users(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 @router.post(

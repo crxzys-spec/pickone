@@ -8,6 +8,7 @@ from app.core.codes import generate_code
 from app.models.expert import Expert
 from app.models.organization import Organization
 from app.repo.organizations import OrganizationRepo
+from app.schemas.pagination import PageParams
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 
 
@@ -18,7 +19,17 @@ def _generate_unique_code(repo: OrganizationRepo) -> str:
     return code
 
 
-def list_organizations(db: Session) -> list[Organization]:
+def list_organizations(db: Session, params: PageParams) -> tuple[list[Organization], int]:
+    return OrganizationRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
+
+
+def list_organizations_all(db: Session) -> list[Organization]:
     return OrganizationRepo(db).list()
 
 

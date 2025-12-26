@@ -1,8 +1,9 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type { Expert, ExpertCreate, ExpertUpdate } from "../types/domain";
 
-export async function listExperts() {
-  const { data } = await http.get<Expert[]>("/experts");
+export async function listExperts(params: ListParams) {
+  const { data } = await http.get<Page<Expert>>("/experts", { params });
   return data;
 }
 

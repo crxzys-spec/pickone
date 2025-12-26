@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from io import BytesIO
 
 from fastapi import HTTPException, status
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.expert import Expert
 from app.repo.experts import ExpertRepo
+from app.schemas.pagination import PageParams
 from app.services import organizations as organization_service
 from app.services import titles as title_service
 from app.services import categories as category_service
@@ -76,8 +79,14 @@ def _coerce_bool(value: object | None, default: bool) -> bool:
     return default
 
 
-def list_experts(db: Session) -> list[Expert]:
-    return ExpertRepo(db).list()
+def list_experts(db: Session, params: PageParams) -> tuple[list[Expert], int]:
+    return ExpertRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
 
 
 def get_expert(db: Session, expert_id: int) -> Expert:

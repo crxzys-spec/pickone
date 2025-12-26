@@ -1,12 +1,18 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type {
   Organization,
   OrganizationCreate,
   OrganizationUpdate,
 } from "../types/domain";
 
-export async function listOrganizations() {
-  const { data } = await http.get<Organization[]>("/organizations");
+export async function listOrganizations(params: ListParams) {
+  const { data } = await http.get<Page<Organization>>("/organizations", { params });
+  return data;
+}
+
+export async function listOrganizationsAll() {
+  const { data } = await http.get<Organization[]>("/organizations/all");
   return data;
 }
 

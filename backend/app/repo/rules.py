@@ -4,12 +4,36 @@ from sqlalchemy import select
 
 from app.models.rule import Rule
 from app.repo.base import BaseRepo
+from app.repo.utils import apply_keyword, apply_sort, paginate
 
 
 class RuleRepo(BaseRepo):
     def list(self) -> list[Rule]:
         stmt = select(Rule).order_by(Rule.id)
         return list(self.db.execute(stmt).scalars().all())
+
+    def list_page(
+        self,
+        keyword: str | None,
+        sort_by: str | None,
+        sort_order: str,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[Rule], int]:
+        stmt = select(Rule)
+        stmt = apply_keyword(stmt, keyword, [Rule.name, Rule.category, Rule.subcategory])
+        sort_map = {
+            "id": Rule.id,
+            "name": Rule.name,
+            "category": Rule.category,
+            "subcategory": Rule.subcategory,
+            "title_required": Rule.title_required,
+            "draw_method": Rule.draw_method,
+            "avoid_enabled": Rule.avoid_enabled,
+            "is_active": Rule.is_active,
+        }
+        stmt = apply_sort(stmt, sort_by, sort_order, sort_map, Rule.id)
+        return paginate(self.db, stmt, page, page_size)
 
     def get_by_id(self, rule_id: int) -> Rule | None:
         stmt = select(Rule).where(Rule.id == rule_id)

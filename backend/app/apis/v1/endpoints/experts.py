@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
 from app.schemas.expert import ExpertCreate, ExpertOut, ExpertUpdate
+from app.schemas.pagination import Page, PageParams
 from app.services import experts as expert_service
 
 router = APIRouter()
@@ -15,13 +16,15 @@ router = APIRouter()
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["expert:read"]))],
-    response_model=list[ExpertOut],
+    response_model=Page[ExpertOut],
 )
 def list_experts(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return expert_service.list_experts(db)
+    items, total = expert_service.list_experts(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 @router.post(

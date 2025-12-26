@@ -16,46 +16,56 @@
     </div>
 
     <el-table
-      :data="filteredRules"
+      :data="rules"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('rules.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('rules.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('rules.columns.name')"
         prop="name"
         min-width="160"
+        sortable="custom"
       />
       <el-table-column
         :label="t('rules.columns.category')"
         prop="category"
         min-width="140"
+        sortable="custom"
       />
       <el-table-column
         :label="t('rules.columns.subcategory')"
         prop="subcategory"
         min-width="140"
+        sortable="custom"
       />
       <el-table-column
         :label="t('rules.columns.title')"
         prop="title_required"
         min-width="140"
+        sortable="custom"
       />
-      <el-table-column :label="t('rules.columns.method')" width="120">
+      <el-table-column :label="t('rules.columns.method')" width="120" prop="draw_method" sortable="custom">
         <template #default="{ row }">
           {{ methodLabel(row.draw_method) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('rules.columns.avoid')" width="100">
+      <el-table-column :label="t('rules.columns.avoid')" width="100" prop="avoid_enabled" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.avoid_enabled ? 'success' : 'info'">
             {{ row.avoid_enabled ? t("common.yes") : t("common.no") }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('rules.columns.active')" width="100">
+      <el-table-column :label="t('rules.columns.active')" width="100" prop="is_active" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
             {{ row.is_active ? t("common.yes") : t("common.no") }}
@@ -73,6 +83,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px">
@@ -151,7 +173,7 @@ import {
   updateRule,
 } from "../../services/rules";
 import { listCategoryTree } from "../../services/categories";
-import { listTitles } from "../../services/titles";
+import { listTitlesAll } from "../../services/titles";
 import type { CategoryTree, Rule, Subcategory, Title } from "../../types/domain";
 
 interface RuleForm {
@@ -169,6 +191,11 @@ const categories = ref<CategoryTree[]>([]);
 const titles = ref<Title[]>([]);
 const loading = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const dialogVisible = ref(false);
@@ -189,12 +216,16 @@ const dialogTitle = computed(() =>
   isEditing.value ? t("rules.dialog.edit") : t("rules.dialog.new"),
 );
 
-const filteredRules = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return rules.value;
+let keywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return rules.value.filter((rule) => rule.name.toLowerCase().includes(key));
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
 });
 
 function resetForm() {
@@ -210,7 +241,15 @@ function resetForm() {
 async function refresh() {
   loading.value = true;
   try {
-    rules.value = await listRules();
+    const result = await listRules({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    rules.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
@@ -221,7 +260,7 @@ async function refreshCategories() {
 }
 
 async function refreshTitles() {
-  titles.value = await listTitles();
+  titles.value = await listTitlesAll();
 }
 
 function resolveCategoryId(rule: Rule): number | null {
@@ -339,6 +378,35 @@ onMounted(async () => {
   await Promise.all([refresh(), refreshCategories(), refreshTitles()]);
 });
 
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
+
 watch(
   () => form.category_id,
   (value, previous) => {
@@ -396,5 +464,11 @@ watch(
 
 .table {
   width: 100%;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

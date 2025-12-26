@@ -26,19 +26,26 @@
     </div>
 
     <el-table
-      :data="filteredExperts"
+      :data="experts"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('experts.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('experts.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('experts.columns.name')"
         prop="name"
         min-width="140"
+        sortable="custom"
       />
-      <el-table-column :label="t('experts.columns.gender')" width="90">
+      <el-table-column :label="t('experts.columns.gender')" width="90" prop="gender" sortable="custom">
         <template #default="{ row }">
           {{ genderLabel(row.gender) }}
         </template>
@@ -47,28 +54,33 @@
         :label="t('experts.columns.company')"
         prop="company"
         min-width="180"
+        sortable="custom"
       />
       <el-table-column
         :label="t('experts.columns.category')"
         prop="category"
         min-width="120"
+        sortable="custom"
       />
       <el-table-column
         :label="t('experts.columns.subcategory')"
         prop="subcategory"
         min-width="120"
+        sortable="custom"
       />
       <el-table-column
         :label="t('experts.columns.title')"
         prop="title"
         min-width="120"
+        sortable="custom"
       />
       <el-table-column
         :label="t('experts.columns.phone')"
         prop="phone"
         min-width="140"
+        sortable="custom"
       />
-      <el-table-column :label="t('experts.columns.active')" width="100">
+      <el-table-column :label="t('experts.columns.active')" width="100" prop="is_active" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
             {{ row.is_active ? t("common.yes") : t("common.no") }}
@@ -86,6 +98,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px">
@@ -191,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox, type UploadRequestOptions } from "element-plus";
 import { useI18n } from "vue-i18n";
 
@@ -204,8 +228,8 @@ import {
   updateExpert,
 } from "../../services/experts";
 import { listCategoryTree } from "../../services/categories";
-import { listOrganizations } from "../../services/organizations";
-import { listTitles } from "../../services/titles";
+import { listOrganizationsAll } from "../../services/organizations";
+import { listTitlesAll } from "../../services/titles";
 import type {
   CategoryTree,
   Expert,
@@ -238,6 +262,11 @@ const loading = ref(false);
 const importing = ref(false);
 const exporting = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const dialogVisible = ref(false);
@@ -264,20 +293,16 @@ const dialogTitle = computed(() =>
   isEditing.value ? t("experts.dialog.edit") : t("experts.dialog.new"),
 );
 
-const filteredExperts = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return experts.value;
+let keywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return experts.value.filter((expert) => {
-    const company = expert.company ?? "";
-    const phone = expert.phone ?? "";
-    return (
-      expert.name.toLowerCase().includes(key) ||
-      company.toLowerCase().includes(key) ||
-      phone.toLowerCase().includes(key)
-    );
-  });
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
 });
 
 function resetForm() {
@@ -312,7 +337,15 @@ function genderLabel(value?: string | null) {
 async function refresh() {
   loading.value = true;
   try {
-    experts.value = await listExperts();
+    const result = await listExperts({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    experts.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
@@ -323,11 +356,11 @@ async function refreshCategories() {
 }
 
 async function refreshOrganizations() {
-  organizations.value = await listOrganizations();
+  organizations.value = await listOrganizationsAll();
 }
 
 async function refreshTitles() {
-  titles.value = await listTitles();
+  titles.value = await listTitlesAll();
 }
 
 const subcategoryOptions = computed<Subcategory[]>(() => {
@@ -533,6 +566,35 @@ onMounted(async () => {
     refreshTitles(),
   ]);
 });
+
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
 </script>
 
 <style scoped>
@@ -582,5 +644,11 @@ onMounted(async () => {
 
 .table {
   width: 100%;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

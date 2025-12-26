@@ -1,4 +1,5 @@
 import http from "../apis/http";
+import type { ListParams, Page } from "../types/pagination";
 import type {
   Category,
   CategoryCreate,
@@ -9,8 +10,8 @@ import type {
   SubcategoryUpdate,
 } from "../types/domain";
 
-export async function listCategories() {
-  const { data } = await http.get<Category[]>("/categories");
+export async function listCategories(params: ListParams) {
+  const { data } = await http.get<Page<Category>>("/categories", { params });
   return data;
 }
 
@@ -33,9 +34,10 @@ export async function deleteCategory(categoryId: number) {
   await http.delete(`/categories/${categoryId}`);
 }
 
-export async function listSubcategories(categoryId: number) {
-  const { data } = await http.get<Subcategory[]>(
+export async function listSubcategories(categoryId: number, params: ListParams) {
+  const { data } = await http.get<Page<Subcategory>>(
     `/categories/${categoryId}/subcategories`,
+    { params },
   );
   return data;
 }

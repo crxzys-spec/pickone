@@ -16,6 +16,7 @@ from app.schemas.organization import (
     OrganizationUpdate,
 )
 from app.schemas.permission import PermissionCreate, PermissionOut, PermissionUpdate
+from app.schemas.pagination import Page, PageParams
 from app.schemas.role import (
     RoleCreate,
     RoleOut,
@@ -60,6 +61,8 @@ __all__ = [
     "PermissionCreate",
     "PermissionOut",
     "PermissionUpdate",
+    "Page",
+    "PageParams",
     "RoleCreate",
     "RoleOut",
     "RolePermissionsUpdate",

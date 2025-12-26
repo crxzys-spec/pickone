@@ -16,29 +16,43 @@
     </div>
 
     <el-table
-      :data="filteredCategories"
+      :data="categories"
       v-loading="loading"
       border
       stripe
       class="table"
+      @sort-change="handleSortChange"
     >
-      <el-table-column :label="t('categories.columns.id')" prop="id" width="80" />
+      <el-table-column
+        :label="t('categories.columns.id')"
+        prop="id"
+        width="80"
+        sortable="custom"
+      />
       <el-table-column
         :label="t('categories.columns.name')"
         prop="name"
         min-width="160"
+        sortable="custom"
       />
       <el-table-column
         :label="t('categories.columns.code')"
         prop="code"
         min-width="140"
+        sortable="custom"
       />
       <el-table-column
         :label="t('categories.columns.sort')"
         prop="sort_order"
         width="100"
+        sortable="custom"
       />
-      <el-table-column :label="t('categories.columns.active')" width="100">
+      <el-table-column
+        :label="t('categories.columns.active')"
+        width="100"
+        prop="is_active"
+        sortable="custom"
+      >
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
             {{ row.is_active ? t("common.yes") : t("common.no") }}
@@ -63,6 +77,18 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </div>
 
   <el-dialog v-model="categoryDialogVisible" :title="categoryDialogTitle" width="520px">
@@ -96,37 +122,57 @@
     width="640px"
   >
     <div class="subtoolbar">
-      <el-button type="primary" @click="openCreateSubcategory">
-        {{ t("categories.subcategories.new") }}
-      </el-button>
-      <el-button @click="refreshSubcategories">
-        {{ t("common.refresh") }}
-      </el-button>
+      <div class="actions">
+        <el-button type="primary" @click="openCreateSubcategory">
+          {{ t("categories.subcategories.new") }}
+        </el-button>
+        <el-button @click="refreshSubcategories">
+          {{ t("common.refresh") }}
+        </el-button>
+      </div>
+      <el-input
+        v-model="subKeyword"
+        :placeholder="t('categories.searchPlaceholder')"
+        clearable
+        class="search"
+      />
     </div>
-    <el-table :data="subcategories" v-loading="subcategoryLoading" border stripe>
+    <el-table
+      :data="subcategories"
+      v-loading="subcategoryLoading"
+      border
+      stripe
+      @sort-change="handleSubSortChange"
+    >
       <el-table-column
         :label="t('categories.subcategories.columns.id')"
         prop="id"
         width="80"
+        sortable="custom"
       />
       <el-table-column
         :label="t('categories.subcategories.columns.name')"
         prop="name"
         min-width="160"
+        sortable="custom"
       />
       <el-table-column
         :label="t('categories.subcategories.columns.code')"
         prop="code"
         min-width="140"
+        sortable="custom"
       />
       <el-table-column
         :label="t('categories.subcategories.columns.sort')"
         prop="sort_order"
         width="100"
+        sortable="custom"
       />
       <el-table-column
         :label="t('categories.subcategories.columns.active')"
         width="100"
+        prop="is_active"
+        sortable="custom"
       >
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
@@ -149,6 +195,17 @@
         </template>
       </el-table-column>
     </el-table>
+    <div class="pager subpager">
+      <el-pagination
+        v-model:current-page="subPage"
+        v-model:page-size="subPageSize"
+        :total="subTotal"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @current-change="handleSubPageChange"
+        @size-change="handleSubPageSizeChange"
+      />
+    </div>
     <template #footer>
       <el-button @click="subcategoryDialogVisible = false">
         {{ t("common.cancel") }}
@@ -183,7 +240,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 
@@ -216,6 +273,11 @@ interface SubcategoryForm {
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const keyword = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const sortBy = ref<string | undefined>();
+const sortOrder = ref<"asc" | "desc" | undefined>();
 const { t } = useI18n();
 
 const categoryDialogVisible = ref(false);
@@ -233,6 +295,12 @@ const subcategoryDialogVisible = ref(false);
 const subcategoryLoading = ref(false);
 const selectedCategory = ref<Category | null>(null);
 const subcategories = ref<Subcategory[]>([]);
+const subKeyword = ref("");
+const subPage = ref(1);
+const subPageSize = ref(10);
+const subTotal = ref(0);
+const subSortBy = ref<string | undefined>();
+const subSortOrder = ref<"asc" | "desc" | undefined>();
 
 const subcategoryFormVisible = ref(false);
 const isEditingSubcategory = ref(false);
@@ -265,18 +333,27 @@ const subcategoryFormTitle = computed(() =>
     : t("categories.subcategories.dialog.new"),
 );
 
-const filteredCategories = computed(() => {
-  const key = keyword.value.trim().toLowerCase();
-  if (!key) {
-    return categories.value;
+let keywordTimer: number | undefined;
+let subKeywordTimer: number | undefined;
+
+watch(keyword, () => {
+  if (keywordTimer) {
+    window.clearTimeout(keywordTimer);
   }
-  return categories.value.filter((category) => {
-    const code = category.code ?? "";
-    return (
-      category.name.toLowerCase().includes(key) ||
-      code.toLowerCase().includes(key)
-    );
-  });
+  keywordTimer = window.setTimeout(() => {
+    page.value = 1;
+    refresh();
+  }, 300);
+});
+
+watch(subKeyword, () => {
+  if (subKeywordTimer) {
+    window.clearTimeout(subKeywordTimer);
+  }
+  subKeywordTimer = window.setTimeout(() => {
+    subPage.value = 1;
+    refreshSubcategories();
+  }, 300);
 });
 
 function resetCategoryForm() {
@@ -296,7 +373,15 @@ function resetSubcategoryForm() {
 async function refresh() {
   loading.value = true;
   try {
-    categories.value = await listCategories();
+    const result = await listCategories({
+      page: page.value,
+      page_size: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      keyword: keyword.value.trim() || undefined,
+    });
+    categories.value = result.items;
+    total.value = result.total;
   } finally {
     loading.value = false;
   }
@@ -308,7 +393,15 @@ async function refreshSubcategories() {
   }
   subcategoryLoading.value = true;
   try {
-    subcategories.value = await listSubcategories(selectedCategory.value.id);
+    const result = await listSubcategories(selectedCategory.value.id, {
+      page: subPage.value,
+      page_size: subPageSize.value,
+      sort_by: subSortBy.value,
+      sort_order: subSortOrder.value,
+      keyword: subKeyword.value.trim() || undefined,
+    });
+    subcategories.value = result.items;
+    subTotal.value = result.total;
   } finally {
     subcategoryLoading.value = false;
   }
@@ -378,6 +471,9 @@ async function confirmDeleteCategory(category: Category) {
 
 function openSubcategories(category: Category) {
   selectedCategory.value = category;
+  subPage.value = 1;
+  subSortBy.value = undefined;
+  subSortOrder.value = undefined;
   subcategoryDialogVisible.value = true;
   refreshSubcategories();
 }
@@ -450,6 +546,64 @@ async function confirmDeleteSubcategory(subcategory: Subcategory) {
 }
 
 onMounted(refresh);
+
+function handleSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    sortBy.value = undefined;
+    sortOrder.value = undefined;
+  } else {
+    sortBy.value = prop;
+    sortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  page.value = 1;
+  refresh();
+}
+
+function handlePageChange(value: number) {
+  page.value = value;
+  refresh();
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  refresh();
+}
+
+function handleSubSortChange({
+  prop,
+  order,
+}: {
+  prop?: string;
+  order?: "ascending" | "descending" | null;
+}) {
+  if (!prop || !order) {
+    subSortBy.value = undefined;
+    subSortOrder.value = undefined;
+  } else {
+    subSortBy.value = prop;
+    subSortOrder.value = order === "ascending" ? "asc" : "desc";
+  }
+  subPage.value = 1;
+  refreshSubcategories();
+}
+
+function handleSubPageChange(value: number) {
+  subPage.value = value;
+  refreshSubcategories();
+}
+
+function handleSubPageSizeChange(value: number) {
+  subPageSize.value = value;
+  subPage.value = 1;
+  refreshSubcategories();
+}
 </script>
 
 <style scoped>
@@ -490,7 +644,9 @@ onMounted(refresh);
 
 .subtoolbar {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
@@ -505,5 +661,15 @@ onMounted(refresh);
 
 .table {
   width: 100%;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.subpager {
+  margin-top: 12px;
 }
 </style>

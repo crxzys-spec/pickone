@@ -8,6 +8,7 @@ from app.core.codes import generate_code
 from app.models.expert import Expert
 from app.models.title import Title
 from app.repo.titles import TitleRepo
+from app.schemas.pagination import PageParams
 from app.schemas.title import TitleCreate, TitleUpdate
 
 
@@ -18,7 +19,17 @@ def _generate_unique_code(repo: TitleRepo) -> str:
     return code
 
 
-def list_titles(db: Session) -> list[Title]:
+def list_titles(db: Session, params: PageParams) -> tuple[list[Title], int]:
+    return TitleRepo(db).list_page(
+        params.keyword,
+        params.sort_by,
+        params.sort_order,
+        params.page,
+        params.page_size,
+    )
+
+
+def list_titles_all(db: Session) -> list[Title]:
     return TitleRepo(db).list()
 
 

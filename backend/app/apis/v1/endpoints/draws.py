@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
 from app.schemas.draw import DrawApply, DrawOut, DrawReplace, DrawResultOut, DrawUpdate
+from app.schemas.pagination import Page, PageParams
 from app.services import draws as draw_service
 
 router = APIRouter()
@@ -12,13 +13,15 @@ router = APIRouter()
 @router.get(
     "",
     dependencies=[Depends(require_scopes(["draw:read"]))],
-    response_model=list[DrawOut],
+    response_model=Page[DrawOut],
 )
 def list_draws(
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return draw_service.list_draws(db)
+    items, total = draw_service.list_draws(db, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 @router.post(
@@ -92,14 +95,16 @@ def execute_draw(
 @router.get(
     "/{draw_id}/results",
     dependencies=[Depends(require_scopes(["draw:read"]))],
-    response_model=list[DrawResultOut],
+    response_model=Page[DrawResultOut],
 )
 def list_draw_results(
     draw_id: int,
+    params: PageParams = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return draw_service.list_results(db, draw_id)
+    items, total = draw_service.list_results_page(db, draw_id, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 @router.post(
