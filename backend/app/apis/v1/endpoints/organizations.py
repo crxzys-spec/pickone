@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
 from app.schemas.organization import (
+    OrganizationBatchDelete,
     OrganizationCreate,
     OrganizationOut,
     OrganizationUpdate,
@@ -93,3 +94,15 @@ def delete_organization(
 ):
     organization_service.delete_organization(db, organization_id)
     return None
+
+
+@router.post(
+    "/batch-delete",
+    dependencies=[Depends(require_scopes(["organization:write"]))],
+)
+def batch_delete_organizations(
+    payload: OrganizationBatchDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return organization_service.delete_organizations(db, payload.ids)

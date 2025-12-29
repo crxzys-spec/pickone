@@ -54,21 +54,21 @@
       <div>
         <h3 class="section-title">{{ t("profile.sections.password") }}</h3>
         <el-form :model="passwordForm" label-width="110px" class="form">
-          <el-form-item :label="t('profile.password.current')">
+          <el-form-item :label="t('profile.password.current')" required>
             <el-input
               v-model="passwordForm.current_password"
               type="password"
               show-password
             />
           </el-form-item>
-          <el-form-item :label="t('profile.password.new')">
+          <el-form-item :label="t('profile.password.new')" required>
             <el-input
               v-model="passwordForm.new_password"
               type="password"
               show-password
             />
           </el-form-item>
-          <el-form-item :label="t('profile.password.confirm')">
+          <el-form-item :label="t('profile.password.confirm')" required>
             <el-input
               v-model="passwordForm.confirm_password"
               type="password"

@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Depends, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
 from app.schemas.category import (
+    CategoryBatchAction,
+    CategoryBatchResult,
     CategoryCreate,
     CategoryOut,
     CategoryTreeOut,
@@ -11,7 +16,9 @@ from app.schemas.category import (
 )
 from app.schemas.pagination import Page, PageParams
 from app.schemas.subcategory import SubcategoryCreate, SubcategoryOut, SubcategoryUpdate
+from app.schemas.specialty import SpecialtyCreate, SpecialtyOut, SpecialtyUpdate
 from app.services import categories as category_service
+from app.services import specialties as specialty_service
 
 router = APIRouter()
 
@@ -54,6 +61,51 @@ def create_category(
     current_user: User = Depends(get_current_user),
 ):
     return category_service.create_category(db, payload)
+
+
+@router.post(
+    "/import",
+    dependencies=[Depends(require_scopes(["category:write"]))],
+)
+def import_categories(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return category_service.import_categories(db, file)
+
+
+@router.get(
+    "/export",
+    dependencies=[Depends(require_scopes(["category:read"]))],
+)
+def export_categories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = category_service.export_categories(db)
+    filename = f"categories_{datetime.utcnow().date().isoformat()}.xlsx"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@router.post(
+    "/batch",
+    dependencies=[
+        Depends(require_scopes(["category:write", "subcategory:write", "specialty:write"]))
+    ],
+    response_model=CategoryBatchResult,
+)
+def batch_categories(
+    payload: CategoryBatchAction,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return category_service.batch_categories(db, payload)
 
 
 @router.put(
@@ -139,4 +191,62 @@ def delete_subcategory(
     current_user: User = Depends(get_current_user),
 ):
     category_service.delete_subcategory(db, subcategory_id)
+    return None
+
+
+@router.get(
+    "/subcategories/{subcategory_id}/specialties",
+    dependencies=[Depends(require_scopes(["specialty:read"]))],
+    response_model=Page[SpecialtyOut],
+)
+def list_specialties(
+    subcategory_id: int,
+    params: PageParams = Depends(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    items, total = specialty_service.list_specialties(db, subcategory_id, params)
+    return Page(items=items, total=total, page=params.page, page_size=params.page_size)
+
+
+@router.post(
+    "/subcategories/{subcategory_id}/specialties",
+    dependencies=[Depends(require_scopes(["specialty:write"]))],
+    response_model=SpecialtyOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_specialty(
+    subcategory_id: int,
+    payload: SpecialtyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return specialty_service.create_specialty(db, subcategory_id, payload)
+
+
+@router.put(
+    "/specialties/{specialty_id}",
+    dependencies=[Depends(require_scopes(["specialty:write"]))],
+    response_model=SpecialtyOut,
+)
+def update_specialty(
+    specialty_id: int,
+    payload: SpecialtyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return specialty_service.update_specialty(db, specialty_id, payload)
+
+
+@router.delete(
+    "/specialties/{specialty_id}",
+    dependencies=[Depends(require_scopes(["specialty:write"]))],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_specialty(
+    specialty_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    specialty_service.delete_specialty(db, specialty_id)
     return None

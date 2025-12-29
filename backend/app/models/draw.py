@@ -15,6 +15,10 @@ class DrawApplication(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
     subcategory_id: Mapped[int | None] = mapped_column(Integer, index=True)
     subcategory: Mapped[str | None] = mapped_column(String(80), index=True)
+    specialty_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    specialty: Mapped[str | None] = mapped_column(String(120), index=True)
+    project_name: Mapped[str | None] = mapped_column(String(255), index=True)
+    project_code: Mapped[str | None] = mapped_column(String(120), index=True)
     expert_count: Mapped[int] = mapped_column(Integer, nullable=False)
     backup_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     draw_method: Mapped[str] = mapped_column(
@@ -22,6 +26,8 @@ class DrawApplication(Base, TimestampMixin):
     )
     review_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     review_location: Mapped[str | None] = mapped_column(String(255))
+    avoid_units: Mapped[str | None] = mapped_column(String(255))
+    avoid_persons: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
 
     rule_id: Mapped[int | None] = mapped_column(ForeignKey("rules.id"))

@@ -1,13 +1,21 @@
 import os
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.codes import generate_code
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal
+from app.models.expert import Expert
 from app.models.permission import Permission
 from app.models.role import Role
+from app.models.title import Title
 from app.models.user import User
+from app.repo.titles import TitleRepo
+from app.services import categories as category_service
+from app.services import experts as expert_service
+from app.services import organizations as organization_service
 
 SCOPE_DEFINITIONS = {
     "expert:read": {"name": "专家查看", "description": "查看专家信息"},
@@ -18,8 +26,12 @@ SCOPE_DEFINITIONS = {
     "category:write": {"name": "类别管理", "description": "管理专业类别"},
     "subcategory:read": {"name": "子类查看", "description": "查看专业子类"},
     "subcategory:write": {"name": "子类管理", "description": "管理专业子类"},
+    "specialty:read": {"name": "三级查看", "description": "查看专业三级"},
+    "specialty:write": {"name": "三级管理", "description": "管理专业三级"},
     "organization:read": {"name": "单位查看", "description": "查看单位枚举"},
     "organization:write": {"name": "单位管理", "description": "管理单位枚举"},
+    "region:read": {"name": "地域查看", "description": "查看地域枚举"},
+    "region:write": {"name": "地域管理", "description": "管理地域枚举"},
     "title:read": {"name": "职称查看", "description": "查看职称枚举"},
     "title:write": {"name": "职称管理", "description": "管理职称枚举"},
     "draw:read": {"name": "抽取查看", "description": "查看抽取申请与结果"},
@@ -53,7 +65,9 @@ ROLE_DEFS = {
             "expert:write",
             "category:read",
             "subcategory:read",
+            "specialty:read",
             "organization:read",
+            "region:read",
             "title:read",
             "draw:read",
             "draw:apply",
@@ -64,6 +78,8 @@ ROLE_DEFS = {
         "description": "规则管理员",
         "scopes": [
             "category:read",
+            "specialty:read",
+            "region:read",
             "rule:read",
             "rule:write",
         ],
@@ -160,7 +176,61 @@ def seed(db: Session) -> None:
     permissions = seed_permissions(db)
     roles = seed_roles(db, permissions)
     seed_admin_user(db, roles)
+    seed_titles(db)
+    seed_default_categories(db)
+    seed_experts(db)
     db.commit()
+
+
+def seed_default_categories(db: Session) -> None:
+    root = Path(__file__).resolve().parents[3]
+    source = root / "docs" / "三级专业划分.xlsx"
+    if not source.exists():
+        return
+
+    class _SeedFile:
+        def __init__(self, file_obj):
+            self.file = file_obj
+
+    with source.open("rb") as file_obj:
+        category_service.import_categories(db, _SeedFile(file_obj))
+
+
+def seed_titles(db: Session) -> None:
+    repo = TitleRepo(db)
+    seeds = [
+        {"name": "初级", "code": "junior", "sort_order": 1},
+        {"name": "中级", "code": "intermediate", "sort_order": 2},
+        {"name": "高级", "code": "senior", "sort_order": 3},
+    ]
+    for payload in seeds:
+        name = payload["name"]
+        if repo.get_by_name(name):
+            continue
+        code = payload["code"]
+        if repo.get_by_code(code):
+            code = generate_code(prefix="title")
+        title = Title(
+            name=name,
+            code=code,
+            sort_order=payload["sort_order"],
+            is_active=True,
+        )
+        db.add(title)
+
+
+def seed_experts(db: Session) -> None:
+    root = Path(__file__).resolve().parents[3]
+    source = root / "docs" / "专家导入表.xlsx"
+    if not source.exists():
+        return
+
+    class _SeedFile:
+        def __init__(self, file_obj):
+            self.file = file_obj
+
+    with source.open("rb") as file_obj:
+        expert_service.import_experts(db, _SeedFile(file_obj))
 
 
 def main() -> None:

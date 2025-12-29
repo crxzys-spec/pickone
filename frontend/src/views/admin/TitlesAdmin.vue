@@ -5,6 +5,14 @@
         <el-button type="primary" @click="openCreate">
           {{ t("titles.new") }}
         </el-button>
+        <el-button
+          type="danger"
+          :loading="deleting"
+          :disabled="selectedIds.length === 0"
+          @click="handleBatchDelete"
+        >
+          {{ t("titles.actions.batchDelete") }}
+        </el-button>
         <el-button @click="refresh">{{ t("common.refresh") }}</el-button>
       </div>
       <el-input
@@ -16,13 +24,16 @@
     </div>
 
     <el-table
+      ref="tableRef"
       :data="titles"
       v-loading="loading"
       border
       stripe
       class="table"
       @sort-change="handleSortChange"
+      @selection-change="handleSelectionChange"
     >
+      <el-table-column type="selection" width="48" />
       <el-table-column
         :label="t('titles.columns.id')"
         prop="id"
@@ -86,7 +97,7 @@
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px">
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('titles.form.name')">
+      <el-form-item :label="t('titles.form.name')" required>
         <el-input v-model="form.name" />
       </el-form-item>
       <el-form-item :label="t('titles.form.code')">
@@ -115,7 +126,13 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 
-import { createTitle, deleteTitle, listTitles, updateTitle } from "../../services/titles";
+import {
+  createTitle,
+  deleteTitle,
+  deleteTitles,
+  listTitles,
+  updateTitle,
+} from "../../services/titles";
 import type { Title } from "../../types/domain";
 
 interface TitleForm {
@@ -126,7 +143,10 @@ interface TitleForm {
 }
 
 const titles = ref<Title[]>([]);
+const tableRef = ref();
 const loading = ref(false);
+const deleting = ref(false);
+const selectedIds = ref<number[]>([]);
 const keyword = ref("");
 const page = ref(1);
 const pageSize = ref(10);
@@ -181,6 +201,8 @@ async function refresh() {
     });
     titles.value = result.items;
     total.value = result.total;
+    tableRef.value?.clearSelection();
+    selectedIds.value = [];
   } finally {
     loading.value = false;
   }
@@ -242,6 +264,40 @@ async function confirmDelete(title: Title) {
   await deleteTitle(title.id);
   ElMessage.success(t("titles.messages.deleted"));
   await refresh();
+}
+
+function handleSelectionChange(rows: Title[]) {
+  selectedIds.value = rows.map((item) => item.id);
+}
+
+async function handleBatchDelete() {
+  if (selectedIds.value.length === 0) {
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      t("titles.messages.batchDeleteConfirm", { count: selectedIds.value.length }),
+      t("common.confirm"),
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  deleting.value = true;
+  try {
+    const result = await deleteTitles(selectedIds.value);
+    ElMessage.success(
+      t("titles.messages.batchDeleteSuccess", {
+        deleted: result.deleted,
+        skipped: result.skipped,
+      }),
+    );
+    await refresh();
+  } catch (error) {
+    ElMessage.error(t("titles.messages.batchDeleteFailed"));
+  } finally {
+    deleting.value = false;
+  }
 }
 
 onMounted(refresh);

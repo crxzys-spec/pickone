@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
-from app.schemas.expert import ExpertCreate, ExpertOut, ExpertUpdate
+from app.schemas.expert import (
+    ExpertBatchDelete,
+    ExpertCreate,
+    ExpertOut,
+    ExpertUpdate,
+)
 from app.schemas.pagination import Page, PageParams
 from app.services import experts as expert_service
 
@@ -25,6 +30,18 @@ def list_experts(
 ):
     items, total = expert_service.list_experts(db, params)
     return Page(items=items, total=total, page=params.page, page_size=params.page_size)
+
+
+@router.get(
+    "/all",
+    dependencies=[Depends(require_scopes(["expert:read"]))],
+    response_model=list[ExpertOut],
+)
+def list_experts_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return expert_service.list_experts_all(db)
 
 
 @router.post(
@@ -110,3 +127,15 @@ def delete_expert(
 ):
     expert_service.delete_expert(db, expert_id)
     return None
+
+
+@router.post(
+    "/batch-delete",
+    dependencies=[Depends(require_scopes(["expert:write"]))],
+)
+def batch_delete_experts(
+    payload: ExpertBatchDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return expert_service.delete_experts(db, payload.ids)

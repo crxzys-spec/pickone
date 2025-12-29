@@ -5,6 +5,14 @@
         <el-button type="primary" @click="openCreate">
           {{ t("organizations.new") }}
         </el-button>
+        <el-button
+          type="danger"
+          :loading="deleting"
+          :disabled="selectedIds.length === 0"
+          @click="handleBatchDelete"
+        >
+          {{ t("organizations.actions.batchDelete") }}
+        </el-button>
         <el-button @click="refresh">{{ t("common.refresh") }}</el-button>
       </div>
       <el-input
@@ -16,13 +24,16 @@
     </div>
 
     <el-table
+      ref="tableRef"
       :data="organizations"
       v-loading="loading"
       border
       stripe
       class="table"
       @sort-change="handleSortChange"
+      @selection-change="handleSelectionChange"
     >
+      <el-table-column type="selection" width="48" />
       <el-table-column
         :label="t('organizations.columns.id')"
         prop="id"
@@ -86,7 +97,7 @@
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px">
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('organizations.form.name')">
+      <el-form-item :label="t('organizations.form.name')" required>
         <el-input v-model="form.name" />
       </el-form-item>
       <el-form-item :label="t('organizations.form.code')">
@@ -118,6 +129,7 @@ import { useI18n } from "vue-i18n";
 import {
   createOrganization,
   deleteOrganization,
+  deleteOrganizations,
   listOrganizations,
   updateOrganization,
 } from "../../services/organizations";
@@ -131,7 +143,10 @@ interface OrganizationForm {
 }
 
 const organizations = ref<Organization[]>([]);
+const tableRef = ref();
 const loading = ref(false);
+const deleting = ref(false);
+const selectedIds = ref<number[]>([]);
 const keyword = ref("");
 const page = ref(1);
 const pageSize = ref(10);
@@ -186,6 +201,8 @@ async function refresh() {
     });
     organizations.value = result.items;
     total.value = result.total;
+    tableRef.value?.clearSelection();
+    selectedIds.value = [];
   } finally {
     loading.value = false;
   }
@@ -247,6 +264,40 @@ async function confirmDelete(organization: Organization) {
   await deleteOrganization(organization.id);
   ElMessage.success(t("organizations.messages.deleted"));
   await refresh();
+}
+
+function handleSelectionChange(rows: Organization[]) {
+  selectedIds.value = rows.map((item) => item.id);
+}
+
+async function handleBatchDelete() {
+  if (selectedIds.value.length === 0) {
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      t("organizations.messages.batchDeleteConfirm", { count: selectedIds.value.length }),
+      t("common.confirm"),
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  deleting.value = true;
+  try {
+    const result = await deleteOrganizations(selectedIds.value);
+    ElMessage.success(
+      t("organizations.messages.batchDeleteSuccess", {
+        deleted: result.deleted,
+        skipped: result.skipped,
+      }),
+    );
+    await refresh();
+  } catch (error) {
+    ElMessage.error(t("organizations.messages.batchDeleteFailed"));
+  } finally {
+    deleting.value = false;
+  }
 }
 
 onMounted(refresh);

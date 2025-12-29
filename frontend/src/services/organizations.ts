@@ -35,3 +35,8 @@ export async function updateOrganization(
 export async function deleteOrganization(organizationId: number) {
   await http.delete(`/organizations/${organizationId}`);
 }
+
+export async function deleteOrganizations(ids: number[]) {
+  const { data } = await http.post("/organizations/batch-delete", { ids });
+  return data as { deleted: number; skipped: number };
+}

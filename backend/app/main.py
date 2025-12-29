@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from app.apis.v1.api import api_router
+from app.core.config import settings
 
 app = FastAPI(title="PickOne API")
 
@@ -16,6 +17,11 @@ app.include_router(api_router, prefix="/api/v1")
 logger = logging.getLogger(__name__)
 DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 INDEX_PATH = DIST_DIR / "index.html"
+UPLOAD_DIR = Path(settings.upload_dir).resolve()
+UPLOAD_URL_PREFIX = settings.upload_url_prefix or "/uploads"
+if not UPLOAD_URL_PREFIX.startswith("/"):
+    UPLOAD_URL_PREFIX = f"/{UPLOAD_URL_PREFIX}"
+UPLOAD_URL_PREFIX = UPLOAD_URL_PREFIX.rstrip("/")
 
 
 @app.exception_handler(Exception)
@@ -59,4 +65,16 @@ def _mount_frontend(app: FastAPI) -> None:
         logger.info("Frontend dist not found at %s", DIST_DIR)
 
 
+def _mount_uploads(app: FastAPI) -> None:
+    try:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        logger.exception("Failed to create upload dir at %s", UPLOAD_DIR)
+        return
+    app.mount(
+        UPLOAD_URL_PREFIX, StaticFiles(directory=str(UPLOAD_DIR)), name="uploads"
+    )
+
+
+_mount_uploads(app)
 _mount_frontend(app)

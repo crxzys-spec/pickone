@@ -1,9 +1,17 @@
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
-from app.schemas.draw import DrawApply, DrawOut, DrawReplace, DrawResultOut, DrawUpdate
+from app.schemas.draw import (
+    DrawApply,
+    DrawBatchDelete,
+    DrawOut,
+    DrawReplace,
+    DrawResultOut,
+    DrawUpdate,
+)
 from app.schemas.pagination import Page, PageParams
 from app.services import draws as draw_service
 
@@ -80,6 +88,18 @@ def delete_draw(
 
 
 @router.post(
+    "/batch-delete",
+    dependencies=[Depends(require_scopes(["draw:apply"]))],
+)
+def batch_delete_draws(
+    payload: DrawBatchDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return draw_service.delete_draws(db, payload.ids)
+
+
+@router.post(
     "/{draw_id}/execute",
     dependencies=[Depends(require_scopes(["draw:execute"]))],
     response_model=list[DrawResultOut],
@@ -119,3 +139,22 @@ def replace_draw_result(
     current_user: User = Depends(get_current_user),
 ):
     return draw_service.replace_draw_result(db, draw_id, payload.result_id)
+
+
+@router.get(
+    "/{draw_id}/export",
+    dependencies=[Depends(require_scopes(["draw:read"]))],
+)
+def export_draw_results(
+    draw_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = draw_service.export_results(db, draw_id)
+    filename = f"draw_results_{draw_id}.xlsx"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )

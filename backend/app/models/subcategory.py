@@ -7,9 +7,7 @@ from app.models.mixins import TimestampMixin
 
 class Subcategory(Base, TimestampMixin):
     __tablename__ = "subcategories"
-    __table_args__ = (
-        UniqueConstraint("category_id", "name", name="uq_subcategory_category_name"),
-    )
+    __table_args__ = (UniqueConstraint("code", name="uq_subcategory_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     category_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)

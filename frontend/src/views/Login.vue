@@ -2,9 +2,9 @@
   <div class="page">
     <el-card class="card gov-panel gov-animate">
       <div class="header">
-        <div class="gov-brand">
+        <div class="login-brand">
           <div class="gov-emblem"></div>
-          <div>
+          <div class="brand-text">
             <h2 class="title">{{ t("login.title") }}</h2>
             <p class="subtitle">{{ t("login.subtitle") }}</p>
           </div>
@@ -12,10 +12,10 @@
       </div>
 
       <el-form :model="form" @submit.prevent="onSubmit" label-width="90px">
-        <el-form-item :label="t('login.username')">
+        <el-form-item :label="t('login.username')" required>
           <el-input v-model="form.username" autocomplete="username" />
         </el-form-item>
-        <el-form-item :label="t('login.password')">
+        <el-form-item :label="t('login.password')" required>
           <el-input
             v-model="form.password"
             type="password"
@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -47,7 +47,7 @@ import { useRoute, useRouter } from "vue-router";
 import { login } from "../services/auth";
 import { useUserStore } from "../stores/user";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
@@ -57,6 +57,14 @@ const form = reactive({
   password: "",
 });
 const loading = ref(false);
+const updateDocumentTitle = () => {
+  const title = t("login.title");
+  const subtitle = t("login.subtitle");
+  document.title = subtitle ? `${title} - ${subtitle}` : title;
+};
+
+onMounted(updateDocumentTitle);
+watch(() => locale.value, updateDocumentTitle);
 
 async function onSubmit() {
   if (!form.username || !form.password) {
@@ -96,24 +104,47 @@ async function onSubmit() {
 
 .header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   position: relative;
   padding-bottom: 12px;
   border-bottom: 1px solid #e1e7f0;
 }
 
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 420px;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .title {
-  margin: 0 0 6px;
-  font-size: 22px;
+  margin: 0;
+  font-size: 20px;
   font-family: var(--gov-font-serif);
+  line-height: 1.25;
+  word-break: break-word;
 }
 
 .subtitle {
-  margin: 0 0 18px;
+  margin: 0;
   color: var(--gov-muted);
+  font-size: 13px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.login-brand :deep(.gov-emblem) {
+  width: 36px;
+  height: 36px;
 }
 
 .submit {

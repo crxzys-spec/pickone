@@ -7,6 +7,11 @@ export async function listExperts(params: ListParams) {
   return data;
 }
 
+export async function listExpertsAll() {
+  const { data } = await http.get<Expert[]>("/experts/all");
+  return data;
+}
+
 export async function getExpert(expertId: number) {
   const { data } = await http.get<Expert>(`/experts/${expertId}`);
   return data;
@@ -24,6 +29,11 @@ export async function updateExpert(expertId: number, payload: ExpertUpdate) {
 
 export async function deleteExpert(expertId: number) {
   await http.delete(`/experts/${expertId}`);
+}
+
+export async function deleteExperts(ids: number[]) {
+  const { data } = await http.post("/experts/batch-delete", { ids });
+  return data as { deleted: number; skipped: number };
 }
 
 export async function importExperts(file: File) {

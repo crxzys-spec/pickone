@@ -83,7 +83,7 @@
 
   <el-dialog v-model="roleDialogVisible" :title="dialogTitle" width="520px">
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('roles.form.name')">
+      <el-form-item :label="t('roles.form.name')" required>
         <el-input v-model="form.name" />
       </el-form-item>
       <el-form-item :label="t('roles.form.description')">

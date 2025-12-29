@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, Integer, String, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -14,8 +14,14 @@ class Rule(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
     subcategory_id: Mapped[int | None] = mapped_column(Integer, index=True)
     subcategory: Mapped[str | None] = mapped_column(String(80))
+    specialty_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    specialty: Mapped[str | None] = mapped_column(String(120), index=True)
+    specialty_ids: Mapped[list[int] | None] = mapped_column(JSON)
     title_required: Mapped[str | None] = mapped_column(String(100))
-    avoid_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    title_required_ids: Mapped[list[int] | None] = mapped_column(JSON)
+    region_required_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    region_required: Mapped[str | None] = mapped_column(String(80))
+    region_required_ids: Mapped[list[int] | None] = mapped_column(JSON)
     draw_method: Mapped[str] = mapped_column(
         String(50), default="random", nullable=False
     )

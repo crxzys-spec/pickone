@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrganizationBase(BaseModel):
@@ -23,3 +23,7 @@ class OrganizationOut(OrganizationBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+
+
+class OrganizationBatchDelete(BaseModel):
+    ids: list[int] = Field(default_factory=list, min_length=1)

@@ -25,3 +25,8 @@ export async function updateTitle(titleId: number, payload: TitleUpdate) {
 export async function deleteTitle(titleId: number) {
   await http.delete(`/titles/${titleId}`);
 }
+
+export async function deleteTitles(ids: number[]) {
+  const { data } = await http.post("/titles/batch-delete", { ids });
+  return data as { deleted: number; skipped: number };
+}

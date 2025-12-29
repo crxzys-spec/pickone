@@ -125,6 +125,29 @@ def delete_organization(db: Session, organization_id: int) -> None:
     db.commit()
 
 
+def delete_organizations(db: Session, organization_ids: list[int]) -> dict[str, int]:
+    unique_ids = []
+    for item in organization_ids:
+        if isinstance(item, int):
+            unique_ids.append(item)
+    if not unique_ids:
+        return {"deleted": 0, "skipped": 0}
+
+    deleted = 0
+    skipped = 0
+    for organization_id in set(unique_ids):
+        try:
+            delete_organization(db, organization_id)
+            deleted += 1
+        except HTTPException:
+            db.rollback()
+            skipped += 1
+        except Exception:
+            db.rollback()
+            raise
+    return {"deleted": deleted, "skipped": skipped}
+
+
 def resolve_organization(
     db: Session,
     organization_id: int | None,

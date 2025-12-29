@@ -31,6 +31,14 @@ export async function deleteDraw(drawId: number) {
   await http.delete(`/draws/${drawId}`);
 }
 
+export async function deleteDraws(ids: number[]) {
+  const { data } = await http.post<{ deleted: number; skipped: number }>(
+    "/draws/batch-delete",
+    { ids },
+  );
+  return data;
+}
+
 export async function executeDraw(drawId: number) {
   const { data } = await http.post<DrawResultOut[]>(`/draws/${drawId}/execute`);
   return data;
@@ -50,4 +58,11 @@ export async function replaceDrawResult(drawId: number, resultId: number) {
     { result_id: resultId },
   );
   return data;
+}
+
+export async function exportDrawResults(drawId: number) {
+  const response = await http.get<Blob>(`/draws/${drawId}/export`, {
+    responseType: "blob",
+  });
+  return response.data;
 }

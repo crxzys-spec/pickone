@@ -7,6 +7,7 @@ const DrawsAdmin = () => import("../views/admin/DrawsAdmin.vue");
 const ExpertsAdmin = () => import("../views/admin/ExpertsAdmin.vue");
 const OrganizationsAdmin = () => import("../views/admin/OrganizationsAdmin.vue");
 const PermissionsAdmin = () => import("../views/admin/PermissionsAdmin.vue");
+const RegionsAdmin = () => import("../views/admin/RegionsAdmin.vue");
 const RolesAdmin = () => import("../views/admin/RolesAdmin.vue");
 const UsersAdmin = () => import("../views/admin/UsersAdmin.vue");
 const RulesAdmin = () => import("../views/admin/RulesAdmin.vue");
@@ -64,6 +65,12 @@ const routes = [
         name: "admin-organizations",
         component: OrganizationsAdmin,
         meta: { title: "admin.menu.organizations" },
+      },
+      {
+        path: "regions",
+        name: "admin-regions",
+        component: RegionsAdmin,
+        meta: { title: "admin.menu.regions" },
       },
       {
         path: "titles",

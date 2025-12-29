@@ -5,6 +5,14 @@
         <el-button type="primary" @click="openCreate">
           {{ t("draws.new") }}
         </el-button>
+        <el-button
+          type="danger"
+          :loading="deleting"
+          :disabled="selectedIds.length === 0"
+          @click="handleBatchDelete"
+        >
+          {{ t("draws.actions.batchDelete") }}
+        </el-button>
         <el-button @click="refresh">{{ t("common.refresh") }}</el-button>
       </div>
       <el-input
@@ -16,13 +24,16 @@
     </div>
 
     <el-table
+      ref="tableRef"
       :data="draws"
       v-loading="loading"
       border
       stripe
       class="table"
       @sort-change="handleSortChange"
+      @selection-change="handleSelectionChange"
     >
+      <el-table-column type="selection" width="48" />
       <el-table-column
         :label="t('draws.columns.id')"
         prop="id"
@@ -39,6 +50,24 @@
         :label="t('draws.columns.subcategory')"
         prop="subcategory"
         min-width="140"
+        sortable="custom"
+      />
+      <el-table-column
+        :label="t('draws.columns.specialty')"
+        prop="specialty"
+        min-width="160"
+        sortable="custom"
+      />
+      <el-table-column
+        :label="t('draws.columns.projectName')"
+        prop="project_name"
+        min-width="180"
+        sortable="custom"
+      />
+      <el-table-column
+        :label="t('draws.columns.projectCode')"
+        prop="project_code"
+        min-width="160"
         sortable="custom"
       />
       <el-table-column
@@ -114,7 +143,7 @@
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px">
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('draws.form.expertCount')">
+      <el-form-item :label="t('draws.form.expertCount')" required>
         <el-input-number v-model="form.expert_count" :min="1" />
       </el-form-item>
       <el-form-item :label="t('draws.form.backupCount')">
@@ -137,7 +166,51 @@
       <el-form-item :label="t('draws.form.reviewLocation')">
         <el-input v-model="form.review_location" />
       </el-form-item>
-      <el-form-item :label="t('draws.form.rule')">
+      <el-form-item :label="t('draws.form.projectName')">
+        <el-input v-model="form.project_name" />
+      </el-form-item>
+      <el-form-item :label="t('draws.form.projectCode')">
+        <el-input v-model="form.project_code" />
+      </el-form-item>
+      <el-form-item :label="t('draws.form.avoidUnits')">
+        <el-select
+          v-model="form.avoid_unit_ids"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          :placeholder="t('draws.form.avoidUnitsPlaceholder')"
+          style="width: 100%;"
+        >
+          <el-option
+            v-for="org in organizations"
+            :key="org.id"
+            :label="org.name"
+            :value="org.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('draws.form.avoidPersons')">
+        <el-select
+          v-model="form.avoid_person_ids"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          :placeholder="t('draws.form.avoidPersonsPlaceholder')"
+          style="width: 100%;"
+        >
+          <el-option
+            v-for="expert in experts"
+            :key="expert.id"
+            :label="formatExpertOption(expert)"
+            :value="expert.id_card_no"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('draws.form.rule')" required>
         <el-select v-model="form.rule_id" clearable style="width: 100%;">
           <el-option
             v-for="rule in rules"
@@ -169,9 +242,16 @@
   <el-dialog
     v-model="resultsVisible"
     :title="t('draws.results.title')"
-    width="760px"
+    width="980px"
   >
     <div class="results-toolbar">
+      <el-button
+        :loading="exportingResults"
+        :disabled="!activeDrawId"
+        @click="handleExportResults"
+      >
+        {{ t("common.export") }}
+      </el-button>
       <el-input
         v-model="resultsKeyword"
         :placeholder="t('experts.searchPlaceholder')"
@@ -193,7 +273,7 @@
       </el-table-column>
       <el-table-column :label="t('draws.results.columns.name')" min-width="140">
         <template #default="{ row }">
-          {{ row.expert?.name || "-" }}
+          {{ maskName(row.expert?.name) || "-" }}
         </template>
       </el-table-column>
       <el-table-column :label="t('draws.results.columns.company')" min-width="160">
@@ -201,14 +281,14 @@
           {{ row.expert?.company || "-" }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('draws.results.columns.category')" min-width="120">
+      <el-table-column :label="t('draws.results.columns.specialties')" min-width="160">
         <template #default="{ row }">
-          {{ row.expert?.category || "-" }}
+          {{ expertSpecialtiesLabel(row.expert) }}
         </template>
       </el-table-column>
       <el-table-column :label="t('draws.results.columns.phone')" min-width="140">
         <template #default="{ row }">
-          {{ row.expert?.phone || "-" }}
+          {{ maskPhone(row.expert?.phone) || "-" }}
         </template>
       </el-table-column>
       <el-table-column :label="t('draws.results.columns.email')" min-width="160">
@@ -259,18 +339,25 @@ import { useI18n } from "vue-i18n";
 import {
   createDraw,
   deleteDraw,
+  deleteDraws,
   executeDraw,
+  exportDrawResults,
   listDrawResults,
   listDraws,
   replaceDrawResult,
   updateDraw,
 } from "../../services/draws";
+import { listExpertsAll } from "../../services/experts";
+import { listOrganizationsAll } from "../../services/organizations";
 import { listRulesAll } from "../../services/rules";
 import type {
   DrawApplication,
   DrawResultOut,
+  Expert,
+  Organization,
   Rule,
 } from "../../types/domain";
+import { maskIdCard, maskName, maskPhone } from "../../utils/mask";
 
 interface DrawForm {
   expert_count: number;
@@ -278,13 +365,22 @@ interface DrawForm {
   draw_method: string;
   review_time: string;
   review_location: string;
+  project_name: string;
+  project_code: string;
+  avoid_unit_ids: number[];
+  avoid_person_ids: string[];
   rule_id: number | null;
   status: string;
 }
 
 const draws = ref<DrawApplication[]>([]);
+const tableRef = ref();
 const rules = ref<Rule[]>([]);
+const organizations = ref<Organization[]>([]);
+const experts = ref<Expert[]>([]);
 const loading = ref(false);
+const deleting = ref(false);
+const selectedIds = ref<number[]>([]);
 const keyword = ref("");
 const page = ref(1);
 const pageSize = ref(10);
@@ -299,6 +395,7 @@ const editingId = ref<number | null>(null);
 const resultsVisible = ref(false);
 const results = ref<DrawResultOut[]>([]);
 const resultsKeyword = ref("");
+const exportingResults = ref(false);
 const resultsPage = ref(1);
 const resultsPageSize = ref(10);
 const resultsTotal = ref(0);
@@ -313,6 +410,10 @@ const form = reactive<DrawForm>({
   draw_method: "random",
   review_time: "",
   review_location: "",
+  project_name: "",
+  project_code: "",
+  avoid_unit_ids: [],
+  avoid_person_ids: [],
   rule_id: null,
   status: "pending",
 });
@@ -350,6 +451,10 @@ function resetForm() {
   form.draw_method = "random";
   form.review_time = "";
   form.review_location = "";
+  form.project_name = "";
+  form.project_code = "";
+  form.avoid_unit_ids = [];
+  form.avoid_person_ids = [];
   form.rule_id = null;
   form.status = "pending";
 }
@@ -378,6 +483,50 @@ function statusLabel(value: string) {
     return t("draws.status.pending");
   }
   return value;
+}
+
+function splitValues(value: string | null | undefined) {
+  if (!value) {
+    return [];
+  }
+  const normalized = value
+    .replace(/[\uFF0C\uFF1B\u3001]/g, ";")
+    .replace(/[|]/g, ";")
+    .replace(/\n/g, ";")
+    .replace(/,/g, ";");
+  return normalized
+    .split(";")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function splitNumericValues(value: string | null | undefined) {
+  return splitValues(value)
+    .map((item) => Number.parseInt(item, 10))
+    .filter((item) => Number.isFinite(item));
+}
+
+function joinValues(values: Array<string | number>) {
+  const normalized = values
+    .map((item) => String(item).trim())
+    .filter((item) => item.length > 0);
+  return normalized.length > 0 ? normalized.join(";") : null;
+}
+
+function expertSpecialtiesLabel(expert: DrawResultOut["expert"] | null | undefined) {
+  if (!expert?.specialties || expert.specialties.length === 0) {
+    return "-";
+  }
+  return expert.specialties.map((item) => item.name).join("、");
+}
+
+function formatExpertOption(expert: Expert) {
+  const name = maskName(expert.name);
+  const idCard = maskIdCard(expert.id_card_no);
+  if (name && idCard) {
+    return `${name} (${idCard})`;
+  }
+  return name || idCard || "-";
 }
 
 const ERROR_MESSAGE_MAP: Record<string, string> = {
@@ -416,6 +565,8 @@ async function refresh() {
     });
     draws.value = result.items;
     total.value = result.total;
+    tableRef.value?.clearSelection();
+    selectedIds.value = [];
   } finally {
     loading.value = false;
   }
@@ -423,6 +574,14 @@ async function refresh() {
 
 async function refreshRules() {
   rules.value = await listRulesAll();
+}
+
+async function refreshOrganizations() {
+  organizations.value = await listOrganizationsAll();
+}
+
+async function refreshExperts() {
+  experts.value = await listExpertsAll();
 }
 
 async function refreshResults() {
@@ -450,6 +609,26 @@ async function refreshResults() {
   }
 }
 
+async function handleExportResults() {
+  if (!activeDrawId.value) {
+    return;
+  }
+  exportingResults.value = true;
+  try {
+    const blob = await exportDrawResults(activeDrawId.value);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `draw_results_${activeDrawId.value}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    ElMessage.error(t("draws.messages.exportFailed"));
+  } finally {
+    exportingResults.value = false;
+  }
+}
+
 function openCreate() {
   resetForm();
   isEditing.value = false;
@@ -465,6 +644,10 @@ function openEdit(draw: DrawApplication) {
   form.draw_method = draw.draw_method;
   form.review_time = draw.review_time ?? "";
   form.review_location = draw.review_location ?? "";
+  form.project_name = draw.project_name ?? "";
+  form.project_code = draw.project_code ?? "";
+  form.avoid_unit_ids = splitNumericValues(draw.avoid_units);
+  form.avoid_person_ids = splitValues(draw.avoid_persons);
   form.rule_id = draw.rule_id ?? null;
   form.status = draw.status;
   dialogVisible.value = true;
@@ -475,6 +658,8 @@ async function submitForm() {
     ElMessage.error(t("draws.messages.ruleRequired"));
     return;
   }
+  const avoidUnitsValue = joinValues(form.avoid_unit_ids);
+  const avoidPersonsValue = joinValues(form.avoid_person_ids);
   try {
     if (isEditing.value && editingId.value) {
       await updateDraw(editingId.value, {
@@ -483,6 +668,10 @@ async function submitForm() {
         draw_method: form.draw_method,
         review_time: form.review_time || null,
         review_location: form.review_location,
+        project_name: form.project_name || null,
+        project_code: form.project_code || null,
+        avoid_units: avoidUnitsValue,
+        avoid_persons: avoidPersonsValue,
         rule_id: form.rule_id,
         status: form.status,
       });
@@ -494,6 +683,10 @@ async function submitForm() {
         draw_method: form.draw_method,
         review_time: form.review_time || null,
         review_location: form.review_location,
+        project_name: form.project_name || null,
+        project_code: form.project_code || null,
+        avoid_units: avoidUnitsValue,
+        avoid_persons: avoidPersonsValue,
         rule_id: form.rule_id,
       });
       ElMessage.success(t("draws.messages.created"));
@@ -518,6 +711,40 @@ async function confirmDelete(draw: DrawApplication) {
   await deleteDraw(draw.id);
   ElMessage.success(t("draws.messages.deleted"));
   await refresh();
+}
+
+function handleSelectionChange(rows: DrawApplication[]) {
+  selectedIds.value = rows.map((item) => item.id);
+}
+
+async function handleBatchDelete() {
+  if (selectedIds.value.length === 0) {
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      t("draws.messages.batchDeleteConfirm", { count: selectedIds.value.length }),
+      t("common.confirm"),
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  deleting.value = true;
+  try {
+    const result = await deleteDraws(selectedIds.value);
+    ElMessage.success(
+      t("draws.messages.batchDeleteSuccess", {
+        deleted: result.deleted,
+        skipped: result.skipped,
+      }),
+    );
+    await refresh();
+  } catch (error) {
+    ElMessage.error(t("draws.messages.batchDeleteFailed"));
+  } finally {
+    deleting.value = false;
+  }
 }
 
 async function confirmExecute(draw: DrawApplication) {
@@ -564,7 +791,7 @@ async function confirmReplace(result: DrawResultOut) {
   try {
     await ElMessageBox.confirm(
       t("draws.messages.replaceConfirm", {
-        name: result.expert?.name ?? result.expert_id,
+        name: maskName(result.expert?.name) || String(result.expert_id),
       }),
       t("common.confirm"),
       { type: "warning" },
@@ -583,7 +810,12 @@ async function confirmReplace(result: DrawResultOut) {
 }
 
 onMounted(async () => {
-  await Promise.all([refresh(), refreshRules()]);
+  await Promise.all([
+    refresh(),
+    refreshRules(),
+    refreshOrganizations(),
+    refreshExperts(),
+  ]);
 });
 
 function handleSortChange({
@@ -710,8 +942,10 @@ function handleResultsPageSizeChange(value: number) {
 
 .results-toolbar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
+  gap: 12px;
 }
 
 .results-pager {

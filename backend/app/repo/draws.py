@@ -24,12 +24,23 @@ class DrawRepo(BaseRepo):
         stmt = apply_keyword(
             stmt,
             keyword,
-            [DrawApplication.category, DrawApplication.review_location, DrawApplication.status],
+            [
+                DrawApplication.category,
+                DrawApplication.subcategory,
+                DrawApplication.specialty,
+                DrawApplication.project_name,
+                DrawApplication.project_code,
+                DrawApplication.review_location,
+                DrawApplication.status,
+            ],
         )
         sort_map = {
             "id": DrawApplication.id,
             "category": DrawApplication.category,
             "subcategory": DrawApplication.subcategory,
+            "specialty": DrawApplication.specialty,
+            "project_name": DrawApplication.project_name,
+            "project_code": DrawApplication.project_code,
             "expert_count": DrawApplication.expert_count,
             "backup_count": DrawApplication.backup_count,
             "draw_method": DrawApplication.draw_method,

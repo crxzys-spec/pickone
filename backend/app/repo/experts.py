@@ -21,14 +21,24 @@ class ExpertRepo(BaseRepo):
         page_size: int,
     ) -> tuple[list[Expert], int]:
         stmt = select(Expert)
-        stmt = apply_keyword(stmt, keyword, [Expert.name, Expert.company, Expert.phone])
+        stmt = apply_keyword(
+            stmt,
+            keyword,
+            [
+                Expert.name,
+                Expert.company,
+                Expert.phone,
+                Expert.id_card_no,
+                Expert.region,
+            ],
+        )
         sort_map = {
             "id": Expert.id,
             "name": Expert.name,
+            "id_card_no": Expert.id_card_no,
             "gender": Expert.gender,
             "company": Expert.company,
-            "category": Expert.category,
-            "subcategory": Expert.subcategory,
+            "region": Expert.region,
             "title": Expert.title,
             "phone": Expert.phone,
             "is_active": Expert.is_active,

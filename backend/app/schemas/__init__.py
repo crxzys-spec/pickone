@@ -30,6 +30,7 @@ from app.schemas.subcategory import (
     SubcategoryOut,
     SubcategoryUpdate,
 )
+from app.schemas.specialty import SpecialtyCreate, SpecialtyOut, SpecialtyUpdate
 from app.schemas.title import TitleCreate, TitleOut, TitleUpdate
 from app.schemas.user import (
     UserCreate,
@@ -71,6 +72,9 @@ __all__ = [
     "SubcategoryCreate",
     "SubcategoryOut",
     "SubcategoryUpdate",
+    "SpecialtyCreate",
+    "SpecialtyOut",
+    "SpecialtyUpdate",
     "TitleCreate",
     "TitleOut",
     "TitleUpdate",

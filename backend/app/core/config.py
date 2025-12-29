@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    upload_dir: str = "./uploads"
+    upload_url_prefix: str = "/uploads"
+    upload_base_url: str | None = None
 
 
 settings = Settings()

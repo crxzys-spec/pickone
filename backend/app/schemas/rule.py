@@ -7,8 +7,14 @@ class RuleBase(BaseModel):
     category: str | None = None
     subcategory_id: int | None = None
     subcategory: str | None = None
+    specialty_id: int | None = None
+    specialty: str | None = None
+    specialty_ids: list[int] | None = None
     title_required: str | None = None
-    avoid_enabled: bool = True
+    title_required_ids: list[int] | None = None
+    region_required_id: int | None = None
+    region_required: str | None = None
+    region_required_ids: list[int] | None = None
     draw_method: str = "random"
     is_active: bool = True
 
@@ -23,8 +29,14 @@ class RuleUpdate(BaseModel):
     category: str | None = None
     subcategory_id: int | None = None
     subcategory: str | None = None
+    specialty_id: int | None = None
+    specialty: str | None = None
+    specialty_ids: list[int] | None = None
     title_required: str | None = None
-    avoid_enabled: bool | None = None
+    title_required_ids: list[int] | None = None
+    region_required_id: int | None = None
+    region_required: str | None = None
+    region_required_ids: list[int] | None = None
     draw_method: str | None = None
     is_active: bool | None = None
 

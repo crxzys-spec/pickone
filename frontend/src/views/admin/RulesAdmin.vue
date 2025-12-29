@@ -48,21 +48,26 @@
         sortable="custom"
       />
       <el-table-column
+        :label="t('rules.columns.specialty')"
+        prop="specialty"
+        min-width="160"
+        sortable="custom"
+      />
+      <el-table-column
         :label="t('rules.columns.title')"
         prop="title_required"
         min-width="140"
         sortable="custom"
       />
+      <el-table-column
+        :label="t('rules.columns.region')"
+        prop="region_required"
+        min-width="120"
+        sortable="custom"
+      />
       <el-table-column :label="t('rules.columns.method')" width="120" prop="draw_method" sortable="custom">
         <template #default="{ row }">
           {{ methodLabel(row.draw_method) }}
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('rules.columns.avoid')" width="100" prop="avoid_enabled" sortable="custom">
-        <template #default="{ row }">
-          <el-tag :type="row.avoid_enabled ? 'success' : 'info'">
-            {{ row.avoid_enabled ? t("common.yes") : t("common.no") }}
-          </el-tag>
         </template>
       </el-table-column>
       <el-table-column :label="t('rules.columns.active')" width="100" prop="is_active" sortable="custom">
@@ -99,41 +104,60 @@
 
   <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px">
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('rules.form.name')">
+      <el-form-item :label="t('rules.form.name')" required>
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item :label="t('rules.form.category')">
-        <el-select v-model="form.category_id" clearable style="width: 100%;">
-          <el-option
-            v-for="category in categories"
-            :key="category.id"
-            :label="category.name"
-            :value="category.id"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item :label="t('rules.form.subcategory')">
+      <el-form-item :label="t('rules.form.specialty')">
         <el-select
-          v-model="form.subcategory_id"
+          v-model="form.specialty_ids"
+          multiple
+          filterable
           clearable
+          collapse-tags
+          collapse-tags-tooltip
           style="width: 100%;"
-          :disabled="!form.category_id"
         >
           <el-option
-            v-for="subcategory in availableSubcategories"
-            :key="subcategory.id"
-            :label="subcategory.name"
-            :value="subcategory.id"
+            v-for="option in specialtyOptions"
+            :key="option.id"
+            :label="option.label"
+            :value="option.id"
           />
         </el-select>
       </el-form-item>
       <el-form-item :label="t('rules.form.titleRequired')">
-        <el-select v-model="form.title_required" clearable style="width: 100%;">
+        <el-select
+          v-model="form.title_required_ids"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          style="width: 100%;"
+        >
           <el-option
             v-for="title in titles"
             :key="title.id"
             :label="title.name"
-            :value="title.name"
+            :value="title.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="t('rules.form.regionRequired')">
+        <el-select
+          v-model="form.region_required_ids"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          style="width: 100%;"
+        >
+          <el-option
+            v-for="region in regions"
+            :key="region.id"
+            :label="region.name"
+            :value="region.id"
           />
         </el-select>
       </el-form-item>
@@ -142,9 +166,6 @@
           <el-option :label="t('rules.method.random')" value="random" />
           <el-option :label="t('rules.method.lottery')" value="lottery" />
         </el-select>
-      </el-form-item>
-      <el-form-item :label="t('rules.form.avoidEnabled')">
-        <el-switch v-model="form.avoid_enabled" />
       </el-form-item>
       <el-form-item :label="t('rules.form.active')">
         <el-switch v-model="form.is_active" />
@@ -173,21 +194,22 @@ import {
   updateRule,
 } from "../../services/rules";
 import { listCategoryTree } from "../../services/categories";
+import { listRegionsAll } from "../../services/regions";
 import { listTitlesAll } from "../../services/titles";
-import type { CategoryTree, Rule, Subcategory, Title } from "../../types/domain";
+import type { CategoryTree, Region, Rule, Title } from "../../types/domain";
 
 interface RuleForm {
   name: string;
-  category_id: number | null;
-  subcategory_id: number | null;
-  title_required: string | null;
+  specialty_ids: number[];
+  title_required_ids: number[];
+  region_required_ids: number[];
   draw_method: string;
-  avoid_enabled: boolean;
   is_active: boolean;
 }
 
 const rules = ref<Rule[]>([]);
 const categories = ref<CategoryTree[]>([]);
+const regions = ref<Region[]>([]);
 const titles = ref<Title[]>([]);
 const loading = ref(false);
 const keyword = ref("");
@@ -204,11 +226,10 @@ const editingId = ref<number | null>(null);
 
 const form = reactive<RuleForm>({
   name: "",
-  category_id: null,
-  subcategory_id: null,
-  title_required: null,
+  specialty_ids: [],
+  title_required_ids: [],
+  region_required_ids: [],
   draw_method: "random",
-  avoid_enabled: true,
   is_active: true,
 });
 
@@ -230,11 +251,10 @@ watch(keyword, () => {
 
 function resetForm() {
   form.name = "";
-  form.category_id = null;
-  form.subcategory_id = null;
-  form.title_required = null;
+  form.specialty_ids = [];
+  form.title_required_ids = [];
+  form.region_required_ids = [];
   form.draw_method = "random";
-  form.avoid_enabled = true;
   form.is_active = true;
 }
 
@@ -263,38 +283,72 @@ async function refreshTitles() {
   titles.value = await listTitlesAll();
 }
 
-function resolveCategoryId(rule: Rule): number | null {
-  if (rule.category_id) {
-    return rule.category_id;
-  }
-  return categories.value.find((category) => category.name === rule.category)?.id ?? null;
+async function refreshRegions() {
+  regions.value = await listRegionsAll();
 }
 
-function resolveSubcategoryId(
-  rule: Rule,
-  categoryId: number | null,
-): number | null {
-  if (rule.subcategory_id) {
-    return rule.subcategory_id;
-  }
-  if (!rule.subcategory || !categoryId) {
-    return null;
-  }
-  const category = categories.value.find((item) => item.id === categoryId);
-  return (
-    category?.subcategories.find((sub) => sub.name === rule.subcategory)?.id ?? null
-  );
+interface SpecialtyOption {
+  id: number;
+  name: string;
+  label: string;
 }
 
-const availableSubcategories = computed<Subcategory[]>(() => {
-  if (!form.category_id) {
+const specialtyOptions = computed<SpecialtyOption[]>(() => {
+  const options: SpecialtyOption[] = [];
+  for (const category of categories.value) {
+    for (const subcategory of category.subcategories ?? []) {
+      for (const specialty of subcategory.specialties ?? []) {
+        const code = specialty.code ? ` (${specialty.code})` : "";
+        options.push({
+          id: specialty.id,
+          name: specialty.name,
+          label: `${category.name} / ${subcategory.name} / ${specialty.name}${code}`,
+        });
+      }
+    }
+  }
+  return options;
+});
+
+function splitTerms(value: string | null | undefined): string[] {
+  if (!value) {
     return [];
   }
-  return (
-    categories.value.find((category) => category.id === form.category_id)
-      ?.subcategories ?? []
-  );
-});
+  return value
+    .split(/[;,|\n、，；]/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function resolveIdsFromNames(
+  value: string | null | undefined,
+  options: Array<{ id: number; name: string }>,
+) {
+  const names = splitTerms(value);
+  if (!names.length) {
+    return [];
+  }
+  const ids: number[] = [];
+  const seen = new Set<number>();
+  for (const name of names) {
+    const id = options.find((item) => item.name === name)?.id;
+    if (id != null && !seen.has(id)) {
+      ids.push(id);
+      seen.add(id);
+    }
+  }
+  return ids;
+}
+
+function resolveSpecialtyIds(rule: Rule): number[] {
+  if (rule.specialty_ids?.length) {
+    return [...rule.specialty_ids];
+  }
+  if (rule.specialty_id) {
+    return [rule.specialty_id];
+  }
+  return resolveIdsFromNames(rule.specialty, specialtyOptions.value);
+}
 
 function methodLabel(value: string) {
   if (value === "lottery") {
@@ -317,12 +371,14 @@ function openEdit(rule: Rule) {
   isEditing.value = true;
   editingId.value = rule.id;
   form.name = rule.name;
-  const categoryId = resolveCategoryId(rule);
-  form.category_id = categoryId;
-  form.subcategory_id = resolveSubcategoryId(rule, categoryId);
-  form.title_required = rule.title_required ?? null;
+  form.specialty_ids = resolveSpecialtyIds(rule);
+  form.title_required_ids = rule.title_required_ids?.length
+    ? [...rule.title_required_ids]
+    : resolveIdsFromNames(rule.title_required, titles.value);
+  form.region_required_ids = rule.region_required_ids?.length
+    ? [...rule.region_required_ids]
+    : resolveIdsFromNames(rule.region_required, regions.value);
   form.draw_method = rule.draw_method;
-  form.avoid_enabled = rule.avoid_enabled;
   form.is_active = rule.is_active;
   dialogVisible.value = true;
 }
@@ -332,22 +388,20 @@ async function submitForm() {
     if (isEditing.value && editingId.value) {
       await updateRule(editingId.value, {
         name: form.name,
-        category_id: form.category_id,
-        subcategory_id: form.subcategory_id,
-        title_required: form.title_required,
+        specialty_ids: form.specialty_ids,
+        title_required_ids: form.title_required_ids,
+        region_required_ids: form.region_required_ids,
         draw_method: form.draw_method,
-        avoid_enabled: form.avoid_enabled,
         is_active: form.is_active,
       });
       ElMessage.success(t("rules.messages.updated"));
     } else {
       await createRule({
         name: form.name,
-        category_id: form.category_id,
-        subcategory_id: form.subcategory_id,
-        title_required: form.title_required,
+        specialty_ids: form.specialty_ids,
+        title_required_ids: form.title_required_ids,
+        region_required_ids: form.region_required_ids,
         draw_method: form.draw_method,
-        avoid_enabled: form.avoid_enabled,
         is_active: form.is_active,
       });
       ElMessage.success(t("rules.messages.created"));
@@ -375,7 +429,12 @@ async function confirmDelete(rule: Rule) {
 }
 
 onMounted(async () => {
-  await Promise.all([refresh(), refreshCategories(), refreshTitles()]);
+  await Promise.all([
+    refresh(),
+    refreshCategories(),
+    refreshRegions(),
+    refreshTitles(),
+  ]);
 });
 
 function handleSortChange({
@@ -407,14 +466,6 @@ function handlePageSizeChange(value: number) {
   refresh();
 }
 
-watch(
-  () => form.category_id,
-  (value, previous) => {
-    if (value !== previous) {
-      form.subcategory_id = null;
-    }
-  },
-);
 </script>
 
 <style scoped>

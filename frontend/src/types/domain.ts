@@ -1,55 +1,53 @@
 export interface Expert {
   id: number;
   name: string;
+  id_card_no: string;
   gender?: string | null;
   phone?: string | null;
   email?: string | null;
   company?: string | null;
   organization_id?: number | null;
+  region_id?: number | null;
+  region?: string | null;
   title?: string | null;
   title_id?: number | null;
-  category_id?: number | null;
-  category?: string | null;
-  subcategory_id?: number | null;
-  subcategory?: string | null;
-  avoid_units?: string | null;
-  avoid_persons?: string | null;
+  specialties?: Specialty[];
+  specialty_ids?: number[];
+  appointment_letter_urls?: string[];
   is_active: boolean;
 }
 
 export interface ExpertCreate {
   name: string;
+  id_card_no: string;
   gender?: string | null;
   phone?: string | null;
   email?: string | null;
   company?: string | null;
   organization_id?: number | null;
+  region_id?: number | null;
+  region?: string | null;
   title?: string | null;
   title_id?: number | null;
-  category_id?: number | null;
-  category?: string | null;
-  subcategory_id?: number | null;
-  subcategory?: string | null;
-  avoid_units?: string | null;
-  avoid_persons?: string | null;
+  specialty_ids?: number[];
+  appointment_letter_urls?: string[];
   is_active: boolean;
 }
 
 export interface ExpertUpdate {
   name?: string | null;
+  id_card_no?: string | null;
   gender?: string | null;
   phone?: string | null;
   email?: string | null;
   company?: string | null;
   organization_id?: number | null;
+  region_id?: number | null;
+  region?: string | null;
   title?: string | null;
   title_id?: number | null;
-  category_id?: number | null;
-  category?: string | null;
-  subcategory_id?: number | null;
-  subcategory?: string | null;
-  avoid_units?: string | null;
-  avoid_persons?: string | null;
+  specialty_ids?: number[] | null;
+  appointment_letter_urls?: string[] | null;
   is_active?: boolean | null;
 }
 
@@ -60,8 +58,14 @@ export interface Rule {
   category: string;
   subcategory_id?: number | null;
   subcategory?: string | null;
+  specialty_id?: number | null;
+  specialty?: string | null;
+  specialty_ids?: number[] | null;
   title_required?: string | null;
-  avoid_enabled: boolean;
+  title_required_ids?: number[] | null;
+  region_required_id?: number | null;
+  region_required?: string | null;
+  region_required_ids?: number[] | null;
   draw_method: string;
   is_active: boolean;
 }
@@ -72,8 +76,14 @@ export interface RuleCreate {
   category?: string | null;
   subcategory_id?: number | null;
   subcategory?: string | null;
+  specialty_id?: number | null;
+  specialty?: string | null;
+  specialty_ids?: number[];
   title_required?: string | null;
-  avoid_enabled: boolean;
+  title_required_ids?: number[];
+  region_required_id?: number | null;
+  region_required?: string | null;
+  region_required_ids?: number[];
   draw_method: string;
   is_active: boolean;
 }
@@ -84,8 +94,14 @@ export interface RuleUpdate {
   category?: string | null;
   subcategory_id?: number | null;
   subcategory?: string | null;
+  specialty_id?: number | null;
+  specialty?: string | null;
+  specialty_ids?: number[] | null;
   title_required?: string | null;
-  avoid_enabled?: boolean | null;
+  title_required_ids?: number[] | null;
+  region_required_id?: number | null;
+  region_required?: string | null;
+  region_required_ids?: number[] | null;
   draw_method?: string | null;
   is_active?: boolean | null;
 }
@@ -96,11 +112,17 @@ export interface DrawApplication {
   category: string;
   subcategory_id?: number | null;
   subcategory?: string | null;
+  specialty_id?: number | null;
+  specialty?: string | null;
+  project_name?: string | null;
+  project_code?: string | null;
   expert_count: number;
   backup_count: number;
   draw_method: string;
   review_time?: string | null;
   review_location?: string | null;
+  avoid_units?: string | null;
+  avoid_persons?: string | null;
   status: string;
   rule_id?: number | null;
 }
@@ -110,11 +132,17 @@ export interface DrawApply {
   category?: string | null;
   subcategory_id?: number | null;
   subcategory?: string | null;
+  specialty_id?: number | null;
+  specialty?: string | null;
+  project_name?: string | null;
+  project_code?: string | null;
   expert_count: number;
   backup_count: number;
   draw_method: string;
   review_time?: string | null;
   review_location?: string | null;
+  avoid_units?: string | null;
+  avoid_persons?: string | null;
   rule_id?: number | null;
 }
 
@@ -123,11 +151,17 @@ export interface DrawUpdate {
   category?: string | null;
   subcategory_id?: number | null;
   subcategory?: string | null;
+  specialty_id?: number | null;
+  specialty?: string | null;
+  project_name?: string | null;
+  project_code?: string | null;
   expert_count?: number | null;
   backup_count?: number | null;
   draw_method?: string | null;
   review_time?: string | null;
   review_location?: string | null;
+  avoid_units?: string | null;
+  avoid_persons?: string | null;
   status?: string | null;
   rule_id?: number | null;
 }
@@ -136,13 +170,11 @@ export interface DrawResultExpert {
   id: number;
   name: string;
   company?: string | null;
-  category_id?: number | null;
-  category?: string | null;
-  subcategory_id?: number | null;
-  subcategory?: string | null;
   phone?: string | null;
   email?: string | null;
   title?: string | null;
+  specialties?: Specialty[];
+  specialty_ids?: number[];
 }
 
 export interface DrawResultOut {
@@ -199,6 +231,28 @@ export interface OrganizationUpdate {
   sort_order?: number | null;
 }
 
+export interface Region {
+  id: number;
+  name: string;
+  code?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface RegionCreate {
+  name: string;
+  code?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface RegionUpdate {
+  name?: string | null;
+  code?: string | null;
+  is_active?: boolean | null;
+  sort_order?: number | null;
+}
+
 export interface Subcategory {
   id: number;
   category_id: number;
@@ -206,6 +260,7 @@ export interface Subcategory {
   code?: string | null;
   is_active: boolean;
   sort_order: number;
+  specialties?: Specialty[];
 }
 
 export interface SubcategoryCreate {
@@ -224,6 +279,29 @@ export interface SubcategoryUpdate {
 
 export interface CategoryTree extends Category {
   subcategories: Subcategory[];
+}
+
+export interface Specialty {
+  id: number;
+  subcategory_id: number;
+  name: string;
+  code?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface SpecialtyCreate {
+  name: string;
+  code?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface SpecialtyUpdate {
+  name?: string | null;
+  code?: string | null;
+  is_active?: boolean | null;
+  sort_order?: number | null;
 }
 
 export interface Title {

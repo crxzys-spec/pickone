@@ -4,7 +4,12 @@ from sqlalchemy.orm import Session
 from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
 from app.schemas.pagination import Page, PageParams
-from app.schemas.title import TitleCreate, TitleOut, TitleUpdate
+from app.schemas.title import (
+    TitleBatchDelete,
+    TitleCreate,
+    TitleOut,
+    TitleUpdate,
+)
 from app.services import titles as title_service
 
 router = APIRouter()
@@ -89,3 +94,15 @@ def delete_title(
 ):
     title_service.delete_title(db, title_id)
     return None
+
+
+@router.post(
+    "/batch-delete",
+    dependencies=[Depends(require_scopes(["title:write"]))],
+)
+def batch_delete_titles(
+    payload: TitleBatchDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return title_service.delete_titles(db, payload.ids)

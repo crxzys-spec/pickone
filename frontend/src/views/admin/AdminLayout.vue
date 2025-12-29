@@ -64,6 +64,13 @@
             </svg>
             <span class="menu-label">{{ t("admin.menu.organizations") }}</span>
           </el-menu-item>
+          <el-menu-item v-if="canRegions" index="/admin/regions">
+            <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path d="M12 3v3M12 17v4M5 10h3M16 10h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <span class="menu-label">{{ t("admin.menu.regions") }}</span>
+          </el-menu-item>
           <el-menu-item v-if="canTitles" index="/admin/titles">
             <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.6" />
@@ -177,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -205,6 +212,11 @@ const headerTitle = computed(() => {
   }
   return t("admin.title");
 });
+const updateDocumentTitle = () => {
+  const title = t("admin.title");
+  const subtitle = t("admin.subtitle");
+  document.title = subtitle ? `${title} - ${subtitle}` : title;
+};
 
 const hasScope = (scope: string) =>
   userStore.scopes.includes("*") || userStore.scopes.includes(scope);
@@ -223,11 +235,14 @@ const canCategories = computed(
     hasScope("category:read") ||
     hasScope("category:write") ||
     hasScope("subcategory:read") ||
-    hasScope("subcategory:write"),
+    hasScope("subcategory:write") ||
+    hasScope("specialty:read") ||
+    hasScope("specialty:write"),
 );
 const canOrganizations = computed(
   () => hasScope("organization:read") || hasScope("organization:write"),
 );
+const canRegions = computed(() => hasScope("region:read") || hasScope("region:write"));
 const canTitles = computed(() => hasScope("title:read") || hasScope("title:write"));
 const canUsers = computed(
   () => hasScope("user:read") || hasScope("user:write"),
@@ -236,7 +251,12 @@ const canRoles = computed(() => hasScope("role:write"));
 const canPermissions = computed(() => hasScope("role:write"));
 
 const showResources = computed(
-  () => canExperts.value || canCategories.value || canOrganizations.value || canTitles.value,
+  () =>
+    canExperts.value ||
+    canCategories.value ||
+    canOrganizations.value ||
+    canRegions.value ||
+    canTitles.value,
 );
 const showSystem = computed(
   () => canUsers.value || canRoles.value || canPermissions.value,
@@ -283,6 +303,7 @@ async function loadUserName() {
 }
 
 onMounted(loadUserName);
+watch(() => locale.value, updateDocumentTitle, { immediate: true });
 </script>
 
 <style scoped>
@@ -305,8 +326,12 @@ onMounted(loadUserName);
 }
 
 .logo {
-  padding: 16px 16px 12px;
+  padding: 16px 14px 12px;
   color: #f8fbff;
+}
+
+.gov-brand {
+  align-items: flex-start;
 }
 
 .gov-brand.collapsed {
@@ -316,13 +341,16 @@ onMounted(loadUserName);
 .logo-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  max-width: 150px;
 }
 
 .logo-name {
   font-weight: 700;
-  letter-spacing: 1.2px;
-  font-size: 18px;
+  letter-spacing: 0.4px;
+  font-size: 15px;
+  line-height: 1.25;
+  word-break: break-word;
   font-family: var(--gov-font-serif);
   color: #f8fbff;
 }
@@ -330,7 +358,9 @@ onMounted(loadUserName);
 .logo-subtitle {
   font-size: 12px;
   color: rgba(232, 239, 247, 0.72);
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
 .menu {
@@ -407,21 +437,21 @@ onMounted(loadUserName);
 }
 
 .sidebar :deep(.gov-emblem) {
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
   border-color: rgba(255, 255, 255, 0.45);
   background: #0e2742;
 }
 
 .sidebar :deep(.gov-emblem::before) {
-  inset: 4px;
+  inset: 3px;
   background: #ffffff;
   border-color: rgba(255, 255, 255, 0.45);
 }
 
 .sidebar :deep(.gov-emblem::after) {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 12px;
 }
 
 .header {

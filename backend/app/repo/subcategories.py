@@ -55,3 +55,15 @@ class SubcategoryRepo(BaseRepo):
             Subcategory.category_id == category_id, Subcategory.name == name
         )
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_by_category_and_code(
+        self, category_id: int, code: str
+    ) -> Subcategory | None:
+        stmt = select(Subcategory).where(
+            Subcategory.category_id == category_id, Subcategory.code == code
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_by_code(self, code: str) -> Subcategory | None:
+        stmt = select(Subcategory).where(Subcategory.code == code)
+        return self.db.execute(stmt).scalar_one_or_none()

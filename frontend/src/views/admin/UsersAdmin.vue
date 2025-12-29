@@ -103,7 +103,7 @@
 
   <el-dialog v-model="userDialogVisible" :title="dialogTitle" width="520px">
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('users.form.username')">
+      <el-form-item :label="t('users.form.username')" required>
         <el-input v-model="form.username" />
       </el-form-item>
       <el-form-item :label="t('users.form.fullName')">
@@ -112,7 +112,7 @@
       <el-form-item :label="t('users.form.email')">
         <el-input v-model="form.email" />
       </el-form-item>
-      <el-form-item :label="t('users.form.password')">
+      <el-form-item :label="t('users.form.password')" :required="!isEditing">
         <el-input v-model="form.password" type="password" show-password />
       </el-form-item>
       <el-form-item :label="t('users.form.active')">

@@ -78,10 +78,10 @@
     width="520px"
   >
     <el-form :model="form" label-width="120px">
-      <el-form-item :label="t('permissions.form.name')">
+      <el-form-item :label="t('permissions.form.name')" required>
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item :label="t('permissions.form.scope')">
+      <el-form-item :label="t('permissions.form.scope')" required>
         <el-input v-model="form.scope" />
       </el-form-item>
       <el-form-item :label="t('permissions.form.description')">

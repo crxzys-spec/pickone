@@ -21,15 +21,26 @@ class RuleRepo(BaseRepo):
         page_size: int,
     ) -> tuple[list[Rule], int]:
         stmt = select(Rule)
-        stmt = apply_keyword(stmt, keyword, [Rule.name, Rule.category, Rule.subcategory])
+        stmt = apply_keyword(
+            stmt,
+            keyword,
+            [
+                Rule.name,
+                Rule.category,
+                Rule.subcategory,
+                Rule.specialty,
+                Rule.region_required,
+            ],
+        )
         sort_map = {
             "id": Rule.id,
             "name": Rule.name,
             "category": Rule.category,
             "subcategory": Rule.subcategory,
+            "specialty": Rule.specialty,
             "title_required": Rule.title_required,
+            "region_required": Rule.region_required,
             "draw_method": Rule.draw_method,
-            "avoid_enabled": Rule.avoid_enabled,
             "is_active": Rule.is_active,
         }
         stmt = apply_sort(stmt, sort_by, sort_order, sort_map, Rule.id)
@@ -79,6 +90,22 @@ class RuleRepo(BaseRepo):
                 Rule.subcategory == subcategory,
                 Rule.is_active.is_(True),
             )
+            .order_by(Rule.id.desc())
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_active_by_specialty_id(self, specialty_id: int) -> Rule | None:
+        stmt = (
+            select(Rule)
+            .where(Rule.specialty_id == specialty_id, Rule.is_active.is_(True))
+            .order_by(Rule.id.desc())
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_active_by_specialty(self, specialty: str) -> Rule | None:
+        stmt = (
+            select(Rule)
+            .where(Rule.specialty == specialty, Rule.is_active.is_(True))
             .order_by(Rule.id.desc())
         )
         return self.db.execute(stmt).scalar_one_or_none()
