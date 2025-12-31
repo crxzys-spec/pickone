@@ -9,9 +9,8 @@ class Title(Base, TimestampMixin):
     __tablename__ = "titles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(
-        String(100), unique=True, index=True, nullable=False
-    )
+    parent_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    name: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     code: Mapped[str | None] = mapped_column(String(50), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

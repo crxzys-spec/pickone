@@ -14,6 +14,7 @@ class TitleRepo(BaseRepo):
 
     def list_page(
         self,
+        parent_id: int | None,
         keyword: str | None,
         sort_by: str | None,
         sort_order: str,
@@ -21,6 +22,8 @@ class TitleRepo(BaseRepo):
         page_size: int,
     ) -> tuple[list[Title], int]:
         stmt = select(Title)
+        if parent_id is not None:
+            stmt = stmt.where(Title.parent_id == parent_id)
         stmt = apply_keyword(stmt, keyword, [Title.name, Title.code])
         sort_map = {
             "id": Title.id,
@@ -39,8 +42,29 @@ class TitleRepo(BaseRepo):
 
     def get_by_name(self, name: str) -> Title | None:
         stmt = select(Title).where(Title.name == name)
-        return self.db.execute(stmt).scalar_one_or_none()
+        return self.db.execute(stmt).scalars().first()
 
     def get_by_code(self, code: str) -> Title | None:
         stmt = select(Title).where(Title.code == code)
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def list_by_parent(self, parent_id: int | None) -> list[Title]:
+        stmt = select(Title)
+        if parent_id is None:
+            stmt = stmt.where(Title.parent_id.is_(None))
+        else:
+            stmt = stmt.where(Title.parent_id == parent_id)
+        stmt = stmt.order_by(Title.sort_order, Title.id)
+        return list(self.db.execute(stmt).scalars().all())
+
+    def get_by_parent_and_name(
+        self, parent_id: int | None, name: str
+    ) -> Title | None:
+        stmt = select(Title).where(Title.parent_id == parent_id, Title.name == name)
+        return self.db.execute(stmt).scalars().first()
+
+    def get_by_parent_and_code(
+        self, parent_id: int | None, code: str
+    ) -> Title | None:
+        stmt = select(Title).where(Title.parent_id == parent_id, Title.code == code)
         return self.db.execute(stmt).scalar_one_or_none()

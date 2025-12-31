@@ -59,7 +59,7 @@
           ref="treeRef"
           :data="treeData"
           :props="treeProps"
-          node-key="key"
+          node-key="id"
           highlight-current
           show-checkbox
           :check-strictly="false"
@@ -80,11 +80,11 @@
               <div class="tree-left">
                 <span
                   class="level-icon"
-                  :class="`level-icon--${data.type}`"
+                  :class="`level-icon--${levelClass(data.level)}`"
                   aria-hidden="true"
                 ></span>
-                <el-tag size="small" :type="levelTagType(data.type)">
-                  {{ t(`categories.levels.${data.type}`) }}
+                <el-tag size="small" class="level-tag">
+                  {{ t("categories.levelTag", { level: data.level }) }}
                 </el-tag>
                 <span class="tree-name">{{ data.name }}</span>
                 <span v-if="data.code" class="tree-code">{{ data.code }}</span>
@@ -95,7 +95,6 @@
               <div class="tree-right">
                 <div class="tree-actions">
                   <el-button
-                    v-if="data.type !== 'specialty'"
                     link
                     size="small"
                     class="icon-button"
@@ -137,12 +136,12 @@
           <div class="panel-title">
             {{ formTitle }}
             <el-tag v-if="formMode !== 'empty'" size="small" class="panel-tag">
-              {{ t(`categories.levels.${formType}`) }}
+              {{ t("categories.levelTag", { level: formLevel }) }}
             </el-tag>
           </div>
           <div class="panel-actions">
             <el-button type="primary" @click="openCreateCategory">
-              {{ t("categories.actions.newCategory") }}
+              {{ t("categories.actions.newRoot") }}
             </el-button>
           </div>
         </div>
@@ -166,14 +165,14 @@
                 <el-input :model-value="formParent.name" disabled />
               </el-form-item>
               <el-form-item
-                :label="t(formLabelPrefix + '.name')"
+                :label="t('categories.form.name')"
                 prop="name"
                 required
               >
                 <el-input v-model="formState.name" />
               </el-form-item>
               <el-form-item
-                :label="t(formLabelPrefix + '.code')"
+                :label="t('categories.form.code')"
                 prop="code"
                 required
               >
@@ -184,10 +183,10 @@
               <div class="form-section-title">
                 {{ t("categories.form.section.settings") }}
               </div>
-              <el-form-item :label="t(formLabelPrefix + '.sort')">
+              <el-form-item :label="t('categories.form.sort')">
                 <el-input-number v-model="formState.sort_order" :min="0" />
               </el-form-item>
-              <el-form-item :label="t(formLabelPrefix + '.active')">
+              <el-form-item :label="t('categories.form.active')">
                 <el-switch v-model="formState.is_active" />
               </el-form-item>
             </div>
@@ -220,34 +219,26 @@ import { useI18n } from "vue-i18n";
 import {
   batchCategories,
   createCategory,
-  createSubcategory,
-  createSpecialty,
   deleteCategory,
-  deleteSubcategory,
-  deleteSpecialty,
   exportCategories,
   importCategories,
   listCategoryTree,
   updateCategory,
-  updateSubcategory,
-  updateSpecialty,
 } from "../../services/categories";
-import type { CategoryTree } from "../../types/domain";
+import type { Category } from "../../types/domain";
 import { resolveErrorMessage } from "../../utils/errors";
 
-type NodeType = "category" | "subcategory" | "specialty";
 type FormMode = "empty" | "create" | "edit";
 
 interface TreeNode {
-  key: string;
   id: number;
-  type: NodeType;
   name: string;
   code?: string | null;
   is_active: boolean;
   sort_order: number;
   parent_id?: number | null;
   parent_name?: string | null;
+  level: number;
   children?: TreeNode[];
 }
 
@@ -266,14 +257,14 @@ const importing = ref(false);
 const exporting = ref(false);
 const batching = ref(false);
 const selectedNode = ref<TreeNode | null>(null);
-const expandedKeys = ref<string[]>([]);
-const checkedKeys = ref<string[]>([]);
+const expandedKeys = ref<number[]>([]);
+const checkedKeys = ref<number[]>([]);
 const checkedNodes = ref<TreeNode[]>([]);
 const formMode = ref<FormMode>("empty");
 const { t } = useI18n();
 
-const formType = ref<NodeType>("category");
-const formParent = ref<{ id: number; name: string; type: NodeType } | null>(null);
+const formLevel = ref(1);
+const formParent = ref<{ id: number; name: string } | null>(null);
 
 const formState = reactive<FormState>({
   name: "",
@@ -304,33 +295,13 @@ const treeProps = {
   label: "name",
 };
 
-const formLabelPrefix = computed(() => {
-  if (formType.value === "category") {
-    return "categories.form";
-  }
-  if (formType.value === "subcategory") {
-    return "categories.subcategories.form";
-  }
-  return "categories.specialties.form";
-});
-
 const formTitle = computed(() => {
   if (formMode.value === "empty") {
     return t("categories.form.title");
   }
-  if (formType.value === "category") {
-    return formMode.value === "edit"
-      ? t("categories.dialog.edit")
-      : t("categories.dialog.new");
-  }
-  if (formType.value === "subcategory") {
-    return formMode.value === "edit"
-      ? t("categories.subcategories.dialog.edit")
-      : t("categories.subcategories.dialog.new");
-  }
   return formMode.value === "edit"
-    ? t("categories.specialties.dialog.edit")
-    : t("categories.specialties.dialog.new");
+    ? t("categories.dialog.edit")
+    : t("categories.dialog.new");
 });
 
 const checkedCount = computed(() => checkedKeys.value.length);
@@ -338,56 +309,24 @@ const hasChecked = computed(() => checkedCount.value > 0);
 
 function translateCategoryDetail(detail: string) {
   switch (detail) {
-    case "Category is in use":
-      return t("categories.messages.inUse");
-    case "Category is in use by rules":
-      return t("categories.messages.inUseByRules");
-    case "Category is in use by draws":
-      return t("categories.messages.inUseByDraws");
-    case "Category is in use by rules, draws":
-      return t("categories.messages.inUseByRulesAndDraws");
-    case "Category name already exists":
-      return t("categories.messages.nameExists");
-    case "Category code already exists":
-      return t("categories.messages.codeExists");
-    case "Category code is required":
-      return t("categories.messages.codeRequired");
-    case "Category not found":
-      return t("categories.messages.notFound");
-    case "Subcategory is in use":
-      return t("categories.subcategories.messages.inUse");
-    case "Subcategory is in use by rules":
-      return t("categories.subcategories.messages.inUseByRules");
-    case "Subcategory is in use by draws":
-      return t("categories.subcategories.messages.inUseByDraws");
-    case "Subcategory is in use by rules, draws":
-      return t("categories.subcategories.messages.inUseByRulesAndDraws");
-    case "Subcategory has specialties":
-      return t("categories.subcategories.messages.hasSpecialties");
-    case "Subcategory name already exists":
-      return t("categories.subcategories.messages.nameExists");
-    case "Subcategory code already exists":
-      return t("categories.subcategories.messages.codeExists");
-    case "Subcategory code is required":
-      return t("categories.subcategories.messages.codeRequired");
-    case "Subcategory not found":
-      return t("categories.subcategories.messages.notFound");
-    case "Specialty is in use":
-      return t("categories.specialties.messages.inUse");
-    case "Specialty is in use by rules":
-      return t("categories.specialties.messages.inUseByRules");
-    case "Specialty is in use by draws":
-      return t("categories.specialties.messages.inUseByDraws");
-    case "Specialty is in use by rules, draws":
-      return t("categories.specialties.messages.inUseByRulesAndDraws");
-    case "Specialty name already exists":
-      return t("categories.specialties.messages.nameExists");
     case "Specialty code already exists":
-      return t("categories.specialties.messages.codeExists");
+      return t("categories.messages.codeExists");
     case "Specialty code is required":
-      return t("categories.specialties.messages.codeRequired");
+      return t("categories.messages.codeRequired");
+    case "Parent specialty not found":
+      return t("categories.messages.parentNotFound");
+    case "Cannot set parent to descendant":
+      return t("categories.messages.parentInvalid");
+    case "Specialty must be a leaf":
+      return t("categories.messages.leafRequired");
     case "Specialty not found":
-      return t("categories.specialties.messages.notFound");
+      return t("categories.messages.notFound");
+    case "Missing valid headers":
+      return t("categories.messages.importMissingHeader");
+    case "Missing code or name":
+      return t("categories.messages.importMissingField");
+    case "Parent code not found":
+      return t("categories.messages.importParentMissing");
     default:
       return null;
   }
@@ -408,19 +347,19 @@ function filterNode(value: string, data: TreeNode) {
   );
 }
 
-function levelTagType(type: NodeType) {
-  if (type === "category") {
-    return "warning";
+function levelClass(level: number) {
+  if (level <= 1) {
+    return "root";
   }
-  if (type === "subcategory") {
-    return "success";
+  if (level === 2) {
+    return "branch";
   }
-  return "info";
+  return "leaf";
 }
 
 function syncCheckedNodes() {
   checkedKeys.value =
-    (treeRef.value?.getCheckedKeys?.(false) as string[]) ?? checkedKeys.value;
+    (treeRef.value?.getCheckedKeys?.(false) as number[]) ?? checkedKeys.value;
   const nodes = treeRef.value?.getCheckedNodes?.(false, false) ?? [];
   checkedNodes.value = nodes as TreeNode[];
 }
@@ -432,44 +371,29 @@ function resetForm() {
   formState.is_active = true;
 }
 
-function buildTree(categories: CategoryTree[]): TreeNode[] {
-  const sortedCategories = [...categories].sort(sortByOrder);
-  return sortedCategories.map((category) => {
-    const subcategories = (category.subcategories ?? []).sort(sortByOrder);
-    return {
-      key: `cat-${category.id}`,
+function buildTree(
+  categories: Category[],
+  level = 1,
+  parent: TreeNode | null = null,
+): TreeNode[] {
+  const sorted = [...categories].sort(sortByOrder);
+  return sorted.map((category) => {
+    const node: TreeNode = {
       id: category.id,
-      type: "category",
       name: category.name,
       code: category.code,
       is_active: category.is_active,
       sort_order: category.sort_order,
-      children: subcategories.map((subcategory) => {
-        const specialties = (subcategory.specialties ?? []).sort(sortByOrder);
-        return {
-          key: `sub-${subcategory.id}`,
-          id: subcategory.id,
-          type: "subcategory",
-          name: subcategory.name,
-          code: subcategory.code,
-          is_active: subcategory.is_active,
-          sort_order: subcategory.sort_order,
-          parent_id: category.id,
-          parent_name: category.name,
-          children: specialties.map((specialty) => ({
-            key: `sp-${specialty.id}`,
-            id: specialty.id,
-            type: "specialty",
-            name: specialty.name,
-            code: specialty.code,
-            is_active: specialty.is_active,
-            sort_order: specialty.sort_order,
-            parent_id: subcategory.id,
-            parent_name: subcategory.name,
-          })),
-        };
-      }),
+      parent_id: category.parent_id ?? parent?.id ?? null,
+      parent_name: parent?.name ?? null,
+      level,
+      children: [],
     };
+    const children = buildTree(category.children ?? [], level + 1, node);
+    if (children.length > 0) {
+      node.children = children;
+    }
+    return node;
   });
 }
 
@@ -487,13 +411,13 @@ function sortByOrder<
   return a.name.localeCompare(b.name);
 }
 
-function findNodeByKey(nodes: TreeNode[], key: string): TreeNode | null {
+function findNodeById(nodes: TreeNode[], id: number): TreeNode | null {
   for (const node of nodes) {
-    if (node.key === key) {
+    if (node.id === id) {
       return node;
     }
     if (node.children && node.children.length > 0) {
-      const found = findNodeByKey(node.children, key);
+      const found = findNodeById(node.children, id);
       if (found) {
         return found;
       }
@@ -504,16 +428,16 @@ function findNodeByKey(nodes: TreeNode[], key: string): TreeNode | null {
 
 function findParentAndIndex(
   nodes: TreeNode[],
-  key: string,
+  id: number,
   parent: TreeNode | null = null,
 ): { parent: TreeNode | null; siblings: TreeNode[]; index: number } | null {
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
-    if (node.key === key) {
+    if (node.id === id) {
       return { parent, siblings: nodes, index };
     }
     if (node.children && node.children.length > 0) {
-      const result = findParentAndIndex(node.children, key, node);
+      const result = findParentAndIndex(node.children, id, node);
       if (result) {
         return result;
       }
@@ -522,27 +446,27 @@ function findParentAndIndex(
   return null;
 }
 
-function getFallbackKeyOnDelete(key: string) {
-  const info = findParentAndIndex(treeData.value, key);
+function getFallbackKeyOnDelete(id: number) {
+  const info = findParentAndIndex(treeData.value, id);
   if (!info) {
     return null;
   }
   const { parent, siblings, index } = info;
   const prev = siblings[index - 1];
   if (prev) {
-    return prev.key;
+    return prev.id;
   }
   const next = siblings[index + 1];
   if (next) {
-    return next.key;
+    return next.id;
   }
-  return parent?.key ?? null;
+  return parent?.id ?? null;
 }
 
-function collectExpandedKeys(nodes: TreeNode[], keys: string[] = []) {
+function collectExpandedKeys(nodes: TreeNode[], keys: number[] = []) {
   for (const node of nodes) {
     if (node.children && node.children.length > 0) {
-      keys.push(node.key);
+      keys.push(node.id);
       collectExpandedKeys(node.children, keys);
     }
   }
@@ -557,8 +481,8 @@ type StoreNode = {
 
 type TreeStore = {
   root?: StoreNode;
-  getNode?: (key: string) => StoreNode | null;
-  setDefaultExpandedKeys?: (keys: string[]) => void;
+  getNode?: (key: number) => StoreNode | null;
+  setDefaultExpandedKeys?: (keys: number[]) => void;
 };
 
 function getTreeStore() {
@@ -575,7 +499,7 @@ function walkStoreNodes(nodes: StoreNode[], callback: (node: StoreNode) => void)
   });
 }
 
-function applyExpandedKeys(keys: string[]) {
+function applyExpandedKeys(keys: number[]) {
   const store = getTreeStore();
   if (!store) {
     return;
@@ -614,7 +538,7 @@ function collapseAll() {
 async function refreshTree() {
   loading.value = true;
   const keepEdit = formMode.value === "edit";
-  const selectedKey = selectedNode.value?.key;
+  const selectedId = selectedNode.value?.id;
   try {
     const result = await listCategoryTree();
     treeData.value = buildTree(result);
@@ -627,8 +551,8 @@ async function refreshTree() {
       treeRef.value?.setCheckedKeys?.(checkedKeys.value, false);
       syncCheckedNodes();
     }
-    if (keepEdit && selectedKey) {
-      const found = findNodeByKey(treeData.value, selectedKey);
+    if (keepEdit && selectedId) {
+      const found = findNodeById(treeData.value, selectedId);
       if (found) {
         selectNode(found);
         startEdit(found);
@@ -645,7 +569,7 @@ async function refreshTree() {
 function selectNode(node: TreeNode | null) {
   selectedNode.value = node;
   if (node) {
-    treeRef.value?.setCurrentKey(node.key);
+    treeRef.value?.setCurrentKey(node.id);
   }
 }
 
@@ -660,8 +584,8 @@ function scrollCurrentNodeIntoView() {
   currentNode?.scrollIntoView({ block: "center" });
 }
 
-async function focusNodeByKey(key: string, mode: "edit" | "select" = "edit") {
-  const found = findNodeByKey(treeData.value, key);
+async function focusNodeById(id: number, mode: "edit" | "select" = "edit") {
+  const found = findNodeById(treeData.value, id);
   if (!found) {
     return false;
   }
@@ -676,30 +600,29 @@ async function focusNodeByKey(key: string, mode: "edit" | "select" = "edit") {
 
 function startEdit(node: TreeNode) {
   formMode.value = "edit";
-  formType.value = node.type;
+  formLevel.value = node.level;
   formState.name = node.name;
   formState.code = node.code ?? "";
   formState.sort_order = node.sort_order;
   formState.is_active = node.is_active;
-  if (node.parent_id && node.parent_name) {
-    formParent.value = {
-      id: node.parent_id,
-      name: node.parent_name,
-      type: node.type === "subcategory" ? "category" : "subcategory",
-    };
+  if (node.parent_id) {
+    const parentName =
+      node.parent_name ?? findNodeById(treeData.value, node.parent_id)?.name ?? "";
+    formParent.value = { id: node.parent_id, name: parentName };
   } else {
     formParent.value = null;
   }
 }
 
-function startCreate(type: NodeType, parent?: TreeNode) {
+function startCreate(parent?: TreeNode) {
   formMode.value = "create";
-  formType.value = type;
   resetForm();
   if (parent) {
-    formParent.value = { id: parent.id, name: parent.name, type: parent.type };
+    formParent.value = { id: parent.id, name: parent.name };
+    formLevel.value = parent.level + 1;
   } else {
     formParent.value = null;
+    formLevel.value = 1;
   }
 }
 
@@ -719,53 +642,49 @@ function handleNodeClick(data: TreeNode) {
 }
 
 function handleNodeExpand(data: TreeNode) {
-  if (!expandedKeys.value.includes(data.key)) {
-    expandedKeys.value = [...expandedKeys.value, data.key];
+  if (!expandedKeys.value.includes(data.id)) {
+    expandedKeys.value = [...expandedKeys.value, data.id];
   }
 }
 
 function handleNodeCollapse(data: TreeNode) {
-  if (expandedKeys.value.includes(data.key)) {
-    expandedKeys.value = expandedKeys.value.filter((key) => key !== data.key);
+  if (expandedKeys.value.includes(data.id)) {
+    expandedKeys.value = expandedKeys.value.filter((key) => key !== data.id);
   }
 }
 
 function handleCheck(
   _data: TreeNode,
-  _info: { checkedKeys: string[]; checkedNodes: TreeNode[] },
+  _info: { checkedKeys: number[]; checkedNodes: TreeNode[] },
 ) {
   syncCheckedNodes();
 }
 
 function ensureExpandedForCreate() {
-  const keys = new Set(expandedKeys.value);
-  if (formType.value === "subcategory" && formParent.value) {
-    keys.add(`cat-${formParent.value.id}`);
+  if (!formParent.value) {
+    return;
   }
-  if (formType.value === "specialty" && formParent.value) {
-    keys.add(`sub-${formParent.value.id}`);
-    if (selectedNode.value?.parent_id) {
-      keys.add(`cat-${selectedNode.value.parent_id}`);
-    }
+  const keys = new Set(expandedKeys.value);
+  let currentId: number | null = formParent.value.id;
+  while (currentId != null) {
+    keys.add(currentId);
+    const current = findNodeById(treeData.value, currentId);
+    currentId = current?.parent_id ?? null;
   }
   expandedKeys.value = Array.from(keys);
 }
 
 function openCreateCategory() {
-  startCreate("category");
+  startCreate();
 }
 
 function openCreateChild(node: TreeNode) {
   selectNode(node);
-  if (!expandedKeys.value.includes(node.key)) {
-    expandedKeys.value = [...expandedKeys.value, node.key];
+  if (!expandedKeys.value.includes(node.id)) {
+    expandedKeys.value = [...expandedKeys.value, node.id];
     applyExpandedKeys(expandedKeys.value);
   }
-  if (node.type === "category") {
-    startCreate("subcategory", node);
-  } else if (node.type === "subcategory") {
-    startCreate("specialty", node);
-  }
+  startCreate(node);
 }
 
 function openEdit(node: TreeNode) {
@@ -773,32 +692,24 @@ function openEdit(node: TreeNode) {
   startEdit(node);
 }
 
-function getAncestorKeys(node: TreeNode) {
-  if (node.type === "category") {
-    return [];
+function getAncestorIds(node: TreeNode) {
+  const ids: number[] = [];
+  let currentId = node.parent_id ?? null;
+  while (currentId != null) {
+    ids.push(currentId);
+    const parent = findNodeById(treeData.value, currentId);
+    currentId = parent?.parent_id ?? null;
   }
-  if (node.type === "subcategory") {
-    return node.parent_id ? [`cat-${node.parent_id}`] : [];
-  }
-  const keys: string[] = [];
-  if (node.parent_id) {
-    const subKey = `sub-${node.parent_id}`;
-    keys.push(subKey);
-    const subNode = findNodeByKey(treeData.value, subKey);
-    if (subNode?.parent_id) {
-      keys.push(`cat-${subNode.parent_id}`);
-    }
-  }
-  return keys;
+  return ids;
 }
 
 function getPrimaryCheckedNodes() {
   const keySet = new Set(checkedKeys.value);
   const nodes = checkedKeys.value
-    .map((key) => findNodeByKey(treeData.value, key))
+    .map((id) => findNodeById(treeData.value, id))
     .filter((node): node is TreeNode => Boolean(node));
   return nodes.filter((node) => {
-    const ancestors = getAncestorKeys(node);
+    const ancestors = getAncestorIds(node);
     return !ancestors.some((ancestor) => keySet.has(ancestor));
   });
 }
@@ -807,7 +718,6 @@ function buildBatchItems(mode: "all" | "primary" = "all") {
   const nodes = mode === "primary" ? getPrimaryCheckedNodes() : checkedNodes.value;
   return nodes.map((node) => ({
     id: node.id,
-    type: node.type,
   }));
 }
 
@@ -872,81 +782,34 @@ async function submitForm() {
   if (!valid) {
     return;
   }
-  let focusKey: string | null = null;
+  let focusId: number | null = null;
   try {
-    if (formType.value === "category") {
-      if (formMode.value === "edit" && selectedNode.value) {
-        await updateCategory(selectedNode.value.id, {
-          name: formState.name,
-          code: formState.code || null,
-          sort_order: formState.sort_order,
-          is_active: formState.is_active,
-        });
-        ElMessage.success(t("categories.messages.updated"));
-      } else {
-        const created = await createCategory({
-          name: formState.name,
-          code: formState.code || null,
-          sort_order: formState.sort_order,
-          is_active: formState.is_active,
-        });
-        focusKey = `cat-${created.id}`;
-        ElMessage.success(t("categories.messages.created"));
-        resetForm();
-      }
-    } else if (formType.value === "subcategory") {
-      if (formMode.value === "edit" && selectedNode.value) {
-        await updateSubcategory(selectedNode.value.id, {
-          name: formState.name,
-          code: formState.code || null,
-          sort_order: formState.sort_order,
-          is_active: formState.is_active,
-        });
-        ElMessage.success(t("categories.subcategories.messages.updated"));
-      } else {
-        if (!formParent.value) {
-          return;
-        }
-        const created = await createSubcategory(formParent.value.id, {
-          name: formState.name,
-          code: formState.code || null,
-          sort_order: formState.sort_order,
-          is_active: formState.is_active,
-        });
-        focusKey = `sub-${created.id}`;
-        ElMessage.success(t("categories.subcategories.messages.created"));
-        resetForm();
-      }
+    if (formMode.value === "edit" && selectedNode.value) {
+      await updateCategory(selectedNode.value.id, {
+        name: formState.name,
+        code: formState.code || null,
+        sort_order: formState.sort_order,
+        is_active: formState.is_active,
+      });
+      ElMessage.success(t("categories.messages.updated"));
     } else {
-      if (formMode.value === "edit" && selectedNode.value) {
-        await updateSpecialty(selectedNode.value.id, {
-          name: formState.name,
-          code: formState.code || null,
-          sort_order: formState.sort_order,
-          is_active: formState.is_active,
-        });
-        ElMessage.success(t("categories.specialties.messages.updated"));
-      } else {
-        if (!formParent.value) {
-          return;
-        }
-        const created = await createSpecialty(formParent.value.id, {
-          name: formState.name,
-          code: formState.code || null,
-          sort_order: formState.sort_order,
-          is_active: formState.is_active,
-        });
-        focusKey = `sp-${created.id}`;
-        ElMessage.success(t("categories.specialties.messages.created"));
-        resetForm();
-      }
+      const created = await createCategory({
+        parent_id: formParent.value?.id ?? null,
+        name: formState.name,
+        code: formState.code || null,
+        sort_order: formState.sort_order,
+        is_active: formState.is_active,
+      });
+      focusId = created.id;
+      ElMessage.success(t("categories.messages.created"));
+      resetForm();
     }
     if (formMode.value === "create") {
       ensureExpandedForCreate();
     }
     await refreshTree();
-    if (focusKey) {
-      await focusNodeByKey(focusKey, "edit");
+    if (focusId != null) {
+      await focusNodeById(focusId, "edit");
     }
   } catch (error) {
     ElMessage.error(
@@ -956,14 +819,9 @@ async function submitForm() {
 }
 
 async function confirmDelete(node: TreeNode) {
-  const message =
-    node.type === "category"
-      ? t("categories.messages.deleteConfirm", { name: node.name })
-      : node.type === "subcategory"
-        ? t("categories.subcategories.messages.deleteConfirm", { name: node.name })
-        : t("categories.specialties.messages.deleteConfirm", { name: node.name });
-  const wasSelected = selectedNode.value?.key === node.key;
-  const fallbackKey = wasSelected ? getFallbackKeyOnDelete(node.key) : null;
+  const message = t("categories.messages.deleteConfirm", { name: node.name });
+  const wasSelected = selectedNode.value?.id === node.id;
+  const fallbackKey = wasSelected ? getFallbackKeyOnDelete(node.id) : null;
   try {
     await ElMessageBox.confirm(message, t("common.confirm"), {
       type: "warning",
@@ -972,32 +830,19 @@ async function confirmDelete(node: TreeNode) {
     return;
   }
   try {
-    if (node.type === "category") {
-      await deleteCategory(node.id);
-      ElMessage.success(t("categories.messages.deleted"));
-    } else if (node.type === "subcategory") {
-      await deleteSubcategory(node.id);
-      ElMessage.success(t("categories.subcategories.messages.deleted"));
-    } else {
-      await deleteSpecialty(node.id);
-      ElMessage.success(t("categories.specialties.messages.deleted"));
-    }
+    await deleteCategory(node.id);
+    ElMessage.success(t("categories.messages.deleted"));
     if (wasSelected) {
       selectedNode.value = null;
       formMode.value = "empty";
     }
-    expandedKeys.value = expandedKeys.value.filter((key) => key !== node.key);
+    expandedKeys.value = expandedKeys.value.filter((key) => key !== node.id);
     await refreshTree();
     if (fallbackKey) {
-      await focusNodeByKey(fallbackKey, "edit");
+      await focusNodeById(fallbackKey, "edit");
     }
   } catch (error) {
-    const fallback =
-      node.type === "category"
-        ? t("categories.messages.deleteFailed")
-        : node.type === "subcategory"
-          ? t("categories.subcategories.messages.deleteFailed")
-          : t("categories.specialties.messages.deleteFailed");
+    const fallback = t("categories.messages.deleteFailed");
     ElMessage.error(resolveErrorMessage(error, fallback, translateCategoryDetail));
   }
 }
@@ -1058,8 +903,8 @@ async function handleBatchDelete() {
     return;
   }
   batching.value = true;
-  const selectedKey = selectedNode.value?.key;
-  const selectedDeleted = selectedKey && checkedKeys.value.includes(selectedKey);
+  const selectedId = selectedNode.value?.id;
+  const selectedDeleted = selectedId != null && checkedKeys.value.includes(selectedId);
   if (selectedDeleted) {
     selectedNode.value = null;
     formMode.value = "empty";
@@ -1253,36 +1098,24 @@ onMounted(refreshTree);
   flex: 0 0 auto;
 }
 
-.level-icon--category {
+.level-icon--root {
   background: #f6e6c4;
   border-color: #e0c58a;
 }
 
-.level-icon--subcategory {
+.level-icon--branch {
   background: #d6ecdf;
   border-color: #a9d1b8;
   border-radius: 2px;
 }
 
-.level-icon--specialty {
+.level-icon--leaf {
   background: #d6e1f1;
   border-color: #a9bfd9;
   transform: rotate(45deg);
 }
 
-:deep(.el-tag.el-tag--warning) {
-  --el-tag-bg-color: #fbf2de;
-  --el-tag-border-color: #e9d7b6;
-  --el-tag-text-color: #9b6a1f;
-}
-
-:deep(.el-tag.el-tag--success) {
-  --el-tag-bg-color: #e6f3ec;
-  --el-tag-border-color: #c7e1d5;
-  --el-tag-text-color: #2e6b4e;
-}
-
-:deep(.el-tag.el-tag--info) {
+.level-tag {
   --el-tag-bg-color: #eff3f8;
   --el-tag-border-color: #d4dde7;
   --el-tag-text-color: #4a5d73;

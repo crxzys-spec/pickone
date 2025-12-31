@@ -25,13 +25,13 @@ from app.schemas.role import (
     RoleUpdate,
 )
 from app.schemas.rule import RuleCreate, RuleOut, RuleUpdate
-from app.schemas.subcategory import (
-    SubcategoryCreate,
-    SubcategoryOut,
-    SubcategoryUpdate,
+from app.schemas.specialty import (
+    SpecialtyCreate,
+    SpecialtyOut,
+    SpecialtyTreeOut,
+    SpecialtyUpdate,
 )
-from app.schemas.specialty import SpecialtyCreate, SpecialtyOut, SpecialtyUpdate
-from app.schemas.title import TitleCreate, TitleOut, TitleUpdate
+from app.schemas.title import TitleCreate, TitleOut, TitleTreeOut, TitleUpdate
 from app.schemas.user import (
     UserCreate,
     UserOut,
@@ -69,14 +69,13 @@ __all__ = [
     "RolePermissionsUpdate",
     "RoleSummary",
     "RoleUpdate",
-    "SubcategoryCreate",
-    "SubcategoryOut",
-    "SubcategoryUpdate",
     "SpecialtyCreate",
     "SpecialtyOut",
+    "SpecialtyTreeOut",
     "SpecialtyUpdate",
     "TitleCreate",
     "TitleOut",
+    "TitleTreeOut",
     "TitleUpdate",
     "Token",
     "RuleCreate",

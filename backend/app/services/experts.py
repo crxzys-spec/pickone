@@ -16,7 +16,6 @@ from app.repo.specialties import SpecialtyRepo
 from app.schemas.pagination import PageParams
 from app.services import organizations as organization_service
 from app.services import titles as title_service
-from app.services import categories as category_service
 from app.services import specialties as specialty_service
 from app.services import regions as region_service
 from app.schemas.expert import ExpertCreate, ExpertUpdate
@@ -28,7 +27,6 @@ EXPORT_FIELDS = [
     ("gender", "性别"),
     ("id_card_no", "身份证号"),
     ("phone", "电话"),
-    ("email", "邮箱"),
     ("company", "单位"),
     ("region", "地域"),
     ("title", "职称"),
@@ -45,16 +43,16 @@ LEGACY_HEADER_MAP = {
     "id_card_no": "id_card_no",
     "id card": "id_card_no",
     "phone": "phone",
-    "email": "email",
     "company": "company",
     "region": "region",
     "title": "title",
-    "category": "category",
-    "subcategory": "subcategory",
     "specialty": "specialties",
     "specialties": "specialties",
+    "专业": "specialties",
+    "专业名称": "specialties",
     "specialty_codes": "specialty_codes",
     "specialty codes": "specialty_codes",
+    "专业编码": "specialty_codes",
     "appointment_letter_urls": "appointment_letter_urls",
     "appointment letters": "appointment_letter_urls",
     "isactive": "is_active",
@@ -224,6 +222,8 @@ def _sync_expert_specialties(
             status_code=status.HTTP_404_NOT_FOUND, detail="Specialty not found"
         )
 
+    specialty_service.ensure_leaf_ids(db, unique_ids)
+
     current = set(
         db.execute(
             select(ExpertSpecialty.specialty_id).where(
@@ -328,6 +328,8 @@ def create_expert(db: Session, payload: ExpertCreate) -> Expert:
         data.get("title"),
         strict=data.get("title_id") is not None,
     )
+    if title is not None:
+        title_service.ensure_leaf_ids(db, [title.id])
 
     expert = Expert(**data)
     if organization:
@@ -422,6 +424,7 @@ def update_expert(db: Session, expert_id: int, payload: ExpertUpdate) -> Expert:
                 strict=update_data.get("title_id") is not None,
             )
             if title:
+                title_service.ensure_leaf_ids(db, [title.id])
                 expert.title_id = title.id
                 expert.title = title.name
             else:
@@ -533,28 +536,10 @@ def import_experts(db: Session, file) -> dict[str, int]:
             id_card_no=id_card_no,
             gender=_coerce_str(data.get("gender")),
             phone=_coerce_str(data.get("phone")),
-            email=_coerce_str(data.get("email")),
             company=_coerce_str(data.get("company")),
             region=region_name,
             title=_coerce_str(data.get("title")),
             is_active=_coerce_bool(data.get("is_active"), True),
-        )
-        category_name = _coerce_str(data.get("category"))
-        subcategory_name = _coerce_str(data.get("subcategory"))
-        category = category_service.resolve_category(
-            db,
-            None,
-            category_name,
-            strict=False,
-            create_if_missing=False,
-        )
-        subcategory = category_service.resolve_subcategory(
-            db,
-            None,
-            subcategory_name,
-            category,
-            strict=False,
-            create_if_missing=False,
         )
         organization = organization_service.resolve_organization(
             db,
@@ -577,10 +562,6 @@ def import_experts(db: Session, file) -> dict[str, int]:
             strict=False,
             create_if_missing=True,
         )
-        if subcategory and category is None:
-            category = category_service.resolve_category(
-                db, subcategory.category_id, None, strict=False
-            )
         if organization:
             expert.organization_id = organization.id
             expert.company = organization.name
@@ -595,25 +576,53 @@ def import_experts(db: Session, file) -> dict[str, int]:
 
         specialty_names = _split_list(data.get("specialties"))
         specialty_codes = _split_list(data.get("specialty_codes"))
-        if specialty_names and not specialty_codes:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"请使用专业编码 (第{row_index}行)",
-            )
         specialty_ids: list[int] = []
+        missing_codes: list[str] = []
+        missing_names: list[str] = []
+        ambiguous_names: list[str] = []
+        unresolved_codes: list[str] = []
+
         if specialty_codes:
-            missing_codes: list[str] = []
             for code in specialty_codes:
                 specialty = SpecialtyRepo(db).get_by_code(code)
                 if specialty is None:
-                    missing_codes.append(code)
+                    unresolved_codes.append(code)
                     continue
                 specialty_ids.append(specialty.id)
-            if missing_codes:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"专业不存在: {', '.join(missing_codes)} (第{row_index}行)",
-                )
+
+        name_inputs = specialty_names + unresolved_codes
+        if name_inputs:
+            stmt = select(Specialty).where(Specialty.name.in_(name_inputs))
+            rows = db.execute(stmt).scalars().all()
+            name_map: dict[str, list[Specialty]] = {}
+            for item in rows:
+                name_map.setdefault(item.name, []).append(item)
+            for name in name_inputs:
+                matches = name_map.get(name, [])
+                if not matches:
+                    if name in unresolved_codes:
+                        missing_codes.append(name)
+                    else:
+                        missing_names.append(name)
+                    continue
+                if len(matches) > 1:
+                    ambiguous_names.append(name)
+                    continue
+                specialty_ids.append(matches[0].id)
+
+        if missing_codes or missing_names:
+            missing = missing_codes + missing_names
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"专业不存在: {', '.join(missing)} (第{row_index}行)",
+            )
+        if ambiguous_names:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"专业名称不唯一，请使用编码: {', '.join(ambiguous_names)} (第{row_index}行)",
+            )
+
+        specialty_ids = list(dict.fromkeys(specialty_ids))
 
         _sync_expert_specialties(db, expert.id, specialty_ids)
         appointment_letter_urls = _split_list(data.get("appointment_letter_urls"))

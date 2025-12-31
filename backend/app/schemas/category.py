@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.subcategory import SubcategoryOut
-
 
 class CategoryBase(BaseModel):
+    parent_id: int | None = None
     name: str
     code: str | None = None
     is_active: bool = True
@@ -13,10 +14,11 @@ class CategoryBase(BaseModel):
 
 
 class CategoryCreate(CategoryBase):
-    code: str = Field(min_length=1)
+    code: str | None = Field(default=None, min_length=1)
 
 
 class CategoryUpdate(BaseModel):
+    parent_id: int | None = None
     name: str | None = None
     code: str | None = Field(default=None, min_length=1)
     is_active: bool | None = None
@@ -30,12 +32,11 @@ class CategoryOut(CategoryBase):
 
 
 class CategoryTreeOut(CategoryOut):
-    subcategories: list[SubcategoryOut] = Field(default_factory=list)
+    children: list[CategoryTreeOut] = Field(default_factory=list)
 
 
 class CategoryBatchItem(BaseModel):
     id: int
-    type: Literal["category", "subcategory", "specialty"]
 
 
 class CategoryBatchAction(BaseModel):
@@ -45,7 +46,6 @@ class CategoryBatchAction(BaseModel):
 
 class CategoryBatchError(BaseModel):
     id: int
-    type: Literal["category", "subcategory", "specialty"]
     detail: str
 
 

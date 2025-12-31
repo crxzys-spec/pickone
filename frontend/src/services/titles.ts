@@ -2,8 +2,19 @@ import http from "../apis/http";
 import type { ListParams, Page } from "../types/pagination";
 import type { Title, TitleCreate, TitleUpdate } from "../types/domain";
 
+export type TitleBatchAction = "enable" | "disable" | "delete";
+
+export interface TitleBatchItem {
+  id: number;
+}
+
 export async function listTitles(params: ListParams) {
   const { data } = await http.get<Page<Title>>("/titles", { params });
+  return data;
+}
+
+export async function listTitleTree() {
+  const { data } = await http.get<Title[]>("/titles/tree");
   return data;
 }
 
@@ -26,7 +37,15 @@ export async function deleteTitle(titleId: number) {
   await http.delete(`/titles/${titleId}`);
 }
 
-export async function deleteTitles(ids: number[]) {
-  const { data } = await http.post("/titles/batch-delete", { ids });
-  return data as { deleted: number; skipped: number };
+export async function batchTitles(
+  action: TitleBatchAction,
+  items: TitleBatchItem[],
+) {
+  const { data } = await http.post("/titles/batch", { action, items });
+  return data as {
+    updated: number;
+    deleted: number;
+    skipped: number;
+    errors?: { id: number; detail: string }[];
+  };
 }

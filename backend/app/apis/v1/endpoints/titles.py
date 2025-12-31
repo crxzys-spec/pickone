@@ -5,9 +5,11 @@ from app.apis.deps import get_current_user, get_db, require_scopes
 from app.models.user import User
 from app.schemas.pagination import Page, PageParams
 from app.schemas.title import (
-    TitleBatchDelete,
+    TitleBatchAction,
+    TitleBatchResult,
     TitleCreate,
     TitleOut,
+    TitleTreeOut,
     TitleUpdate,
 )
 from app.services import titles as title_service
@@ -27,6 +29,18 @@ def list_titles(
 ):
     items, total = title_service.list_titles(db, params)
     return Page(items=items, total=total, page=params.page, page_size=params.page_size)
+
+
+@router.get(
+    "/tree",
+    dependencies=[Depends(require_scopes(["title:read"]))],
+    response_model=list[TitleTreeOut],
+)
+def list_title_tree(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return title_service.list_title_tree(db)
 
 
 @router.get(
@@ -97,12 +111,19 @@ def delete_title(
 
 
 @router.post(
-    "/batch-delete",
+    "/batch",
     dependencies=[Depends(require_scopes(["title:write"]))],
+    response_model=TitleBatchResult,
 )
-def batch_delete_titles(
-    payload: TitleBatchDelete,
+def batch_titles(
+    payload: TitleBatchAction,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return title_service.delete_titles(db, payload.ids)
+    result = title_service.batch_titles(db, payload.action, [item.id for item in payload.items])
+    return TitleBatchResult(
+        updated=int(result.get("updated", 0)),
+        deleted=int(result.get("deleted", 0)),
+        skipped=int(result.get("skipped", 0)),
+        errors=result.get("errors", []),
+    )

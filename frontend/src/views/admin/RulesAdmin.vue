@@ -42,12 +42,6 @@
         sortable="custom"
       />
       <el-table-column
-        :label="t('rules.columns.subcategory')"
-        prop="subcategory"
-        min-width="140"
-        sortable="custom"
-      />
-      <el-table-column
         :label="t('rules.columns.specialty')"
         prop="specialty"
         min-width="160"
@@ -108,40 +102,32 @@
         <el-input v-model="form.name" />
       </el-form-item>
       <el-form-item :label="t('rules.form.specialty')">
-        <el-select
+        <el-tree-select
           v-model="form.specialty_ids"
+          :data="specialtyTreeOptions"
+          :props="specialtyTreeProps"
           multiple
           filterable
           clearable
+          check-strictly
           collapse-tags
           collapse-tags-tooltip
           style="width: 100%;"
-        >
-          <el-option
-            v-for="option in specialtyOptions"
-            :key="option.id"
-            :label="option.label"
-            :value="option.id"
-          />
-        </el-select>
+        />
       </el-form-item>
       <el-form-item :label="t('rules.form.titleRequired')">
-        <el-select
+        <el-tree-select
           v-model="form.title_required_ids"
+          :data="titleTreeOptions"
+          :props="titleTreeProps"
           multiple
           filterable
           clearable
+          check-strictly
           collapse-tags
           collapse-tags-tooltip
           style="width: 100%;"
-        >
-          <el-option
-            v-for="title in titles"
-            :key="title.id"
-            :label="title.name"
-            :value="title.id"
-          />
-        </el-select>
+        />
       </el-form-item>
       <el-form-item :label="t('rules.form.regionRequired')">
         <el-select
@@ -195,8 +181,8 @@ import {
 } from "../../services/rules";
 import { listCategoryTree } from "../../services/categories";
 import { listRegionsAll } from "../../services/regions";
-import { listTitlesAll } from "../../services/titles";
-import type { CategoryTree, Region, Rule, Title } from "../../types/domain";
+import { listTitleTree } from "../../services/titles";
+import type { Category, Region, Rule, Title } from "../../types/domain";
 
 interface RuleForm {
   name: string;
@@ -208,9 +194,9 @@ interface RuleForm {
 }
 
 const rules = ref<Rule[]>([]);
-const categories = ref<CategoryTree[]>([]);
+const specialtyTree = ref<Category[]>([]);
 const regions = ref<Region[]>([]);
-const titles = ref<Title[]>([]);
+const titleTree = ref<Title[]>([]);
 const loading = ref(false);
 const keyword = ref("");
 const page = ref(1);
@@ -276,39 +262,72 @@ async function refresh() {
 }
 
 async function refreshCategories() {
-  categories.value = await listCategoryTree();
+  specialtyTree.value = await listCategoryTree();
 }
 
 async function refreshTitles() {
-  titles.value = await listTitlesAll();
+  titleTree.value = await listTitleTree();
 }
 
 async function refreshRegions() {
   regions.value = await listRegionsAll();
 }
 
-interface SpecialtyOption {
+type TreeSource = {
   id: number;
   name: string;
+  code?: string | null;
+  children?: TreeSource[];
+};
+
+type TreeOption = {
+  id: number;
   label: string;
+  is_leaf: boolean;
+  children?: TreeOption[];
+};
+
+function buildTreeOptions(nodes: TreeSource[]): TreeOption[] {
+  return (nodes ?? []).map((node) => {
+    const children = buildTreeOptions(node.children ?? []);
+    return {
+      id: node.id,
+      label: node.code ? `${node.code} ${node.name}` : node.name,
+      is_leaf: children.length == 0,
+      children: children.length > 0 ? children : undefined,
+    };
+  });
 }
 
-const specialtyOptions = computed<SpecialtyOption[]>(() => {
-  const options: SpecialtyOption[] = [];
-  for (const category of categories.value) {
-    for (const subcategory of category.subcategories ?? []) {
-      for (const specialty of subcategory.specialties ?? []) {
-        const code = specialty.code ? ` (${specialty.code})` : "";
-        options.push({
-          id: specialty.id,
-          name: specialty.name,
-          label: `${category.name} / ${subcategory.name} / ${specialty.name}${code}`,
-        });
-      }
+function flattenTree<T extends TreeSource>(nodes: T[]): T[] {
+  const result: T[] = [];
+  nodes.forEach((node) => {
+    result.push(node);
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenTree(node.children as T[]));
     }
-  }
-  return options;
-});
+  });
+  return result;
+}
+
+const specialtyTreeOptions = computed<TreeOption[]>(() =>
+  buildTreeOptions(specialtyTree.value),
+);
+
+const titleTreeOptions = computed<TreeOption[]>(() =>
+  buildTreeOptions(titleTree.value),
+);
+
+const specialtyFlat = computed(() => flattenTree(specialtyTree.value));
+const titleFlat = computed(() => flattenTree(titleTree.value));
+
+const specialtyTreeProps = {
+  value: "id",
+  label: "label",
+  children: "children",
+};
+
+const titleTreeProps = specialtyTreeProps;
 
 function splitTerms(value: string | null | undefined): string[] {
   if (!value) {
@@ -347,7 +366,7 @@ function resolveSpecialtyIds(rule: Rule): number[] {
   if (rule.specialty_id) {
     return [rule.specialty_id];
   }
-  return resolveIdsFromNames(rule.specialty, specialtyOptions.value);
+  return resolveIdsFromNames(rule.specialty, specialtyFlat.value);
 }
 
 function methodLabel(value: string) {
@@ -374,7 +393,7 @@ function openEdit(rule: Rule) {
   form.specialty_ids = resolveSpecialtyIds(rule);
   form.title_required_ids = rule.title_required_ids?.length
     ? [...rule.title_required_ids]
-    : resolveIdsFromNames(rule.title_required, titles.value);
+    : resolveIdsFromNames(rule.title_required, titleFlat.value);
   form.region_required_ids = rule.region_required_ids?.length
     ? [...rule.region_required_ids]
     : resolveIdsFromNames(rule.region_required, regions.value);

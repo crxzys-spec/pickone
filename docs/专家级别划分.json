@@ -1,0 +1,226 @@
+{
+    "success": true,
+    "result": [
+        {
+            "code": "530199",
+            "desc": "昆明市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530199_0"
+        },
+        {
+            "code": "530381",
+            "desc": "云南省曲靖市宣威市",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530381_0"
+        },
+        {
+            "code": "530399",
+            "desc": "曲靖市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530399_0"
+        },
+        {
+            "code": "530499",
+            "desc": "玉溪市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530499_0"
+        },
+        {
+            "code": "530522",
+            "desc": "云南省保山市腾冲市",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530522_0"
+        },
+        {
+            "code": "530599",
+            "desc": "保山市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530599_0"
+        },
+        {
+            "code": "530627",
+            "desc": "云南省昭通市镇雄县",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530627_0"
+        },
+        {
+            "code": "530699",
+            "desc": "昭通市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530699_0"
+        },
+        {
+            "code": "530799",
+            "desc": "丽江市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530799_0"
+        },
+        {
+            "code": "530899",
+            "desc": "普洱市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530899_0"
+        },
+        {
+            "code": "530999",
+            "desc": "临沧市本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_530999_0"
+        },
+        {
+            "code": "532399",
+            "desc": "楚雄彝族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_532399_0"
+        },
+        {
+            "code": "532599",
+            "desc": "红河哈尼族彝族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_532599_0"
+        },
+        {
+            "code": "532699",
+            "desc": "文山壮族苗族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_532699_0"
+        },
+        {
+            "code": "532899",
+            "desc": "西双版纳傣族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_532899_0"
+        },
+        {
+            "code": "532999",
+            "desc": "大理白族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_532999_0"
+        },
+        {
+            "code": "533199",
+            "desc": "德宏傣族景颇族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_533199_0"
+        },
+        {
+            "code": "533399",
+            "desc": "怒江傈僳族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_533399_0"
+        },
+        {
+            "code": "533499",
+            "desc": "迪庆藏族自治州本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_533499_0"
+        },
+        {
+            "code": "539900",
+            "desc": "云南省本级",
+            "districtCode": null,
+            "districtName": null,
+            "envCode": "beijing",
+            "offsiteFlag": 0,
+            "extractAudit": null,
+            "projectEncode": null,
+            "uniqueKey": "beijing_539900_0"
+        }
+    ],
+    "error": null
+}

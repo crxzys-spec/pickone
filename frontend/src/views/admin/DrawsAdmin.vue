@@ -47,12 +47,6 @@
         sortable="custom"
       />
       <el-table-column
-        :label="t('draws.columns.subcategory')"
-        prop="subcategory"
-        min-width="140"
-        sortable="custom"
-      />
-      <el-table-column
         :label="t('draws.columns.specialty')"
         prop="specialty"
         min-width="160"
@@ -206,7 +200,7 @@
             v-for="expert in experts"
             :key="expert.id"
             :label="formatExpertOption(expert)"
-            :value="expert.id_card_no"
+            :value="expert.id"
           />
         </el-select>
       </el-form-item>
@@ -291,11 +285,6 @@
           {{ maskPhone(row.expert?.phone) || "-" }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('draws.results.columns.email')" min-width="160">
-        <template #default="{ row }">
-          {{ row.expert?.email || "-" }}
-        </template>
-      </el-table-column>
       <el-table-column :label="t('draws.results.columns.actions')" width="140">
         <template #default="{ row }">
           <el-button
@@ -368,7 +357,7 @@ interface DrawForm {
   project_name: string;
   project_code: string;
   avoid_unit_ids: number[];
-  avoid_person_ids: string[];
+  avoid_person_ids: number[];
   rule_id: number | null;
   status: string;
 }
@@ -647,7 +636,7 @@ function openEdit(draw: DrawApplication) {
   form.project_name = draw.project_name ?? "";
   form.project_code = draw.project_code ?? "";
   form.avoid_unit_ids = splitNumericValues(draw.avoid_units);
-  form.avoid_person_ids = splitValues(draw.avoid_persons);
+  form.avoid_person_ids = splitNumericValues(draw.avoid_persons);
   form.rule_id = draw.rule_id ?? null;
   form.status = draw.status;
   dialogVisible.value = true;

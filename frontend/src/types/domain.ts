@@ -4,7 +4,6 @@ export interface Expert {
   id_card_no: string;
   gender?: string | null;
   phone?: string | null;
-  email?: string | null;
   company?: string | null;
   organization_id?: number | null;
   region_id?: number | null;
@@ -22,7 +21,6 @@ export interface ExpertCreate {
   id_card_no: string;
   gender?: string | null;
   phone?: string | null;
-  email?: string | null;
   company?: string | null;
   organization_id?: number | null;
   region_id?: number | null;
@@ -39,7 +37,6 @@ export interface ExpertUpdate {
   id_card_no?: string | null;
   gender?: string | null;
   phone?: string | null;
-  email?: string | null;
   company?: string | null;
   organization_id?: number | null;
   region_id?: number | null;
@@ -171,7 +168,6 @@ export interface DrawResultExpert {
   name: string;
   company?: string | null;
   phone?: string | null;
-  email?: string | null;
   title?: string | null;
   specialties?: Specialty[];
   specialty_ids?: number[];
@@ -189,13 +185,16 @@ export interface DrawResultOut {
 
 export interface Category {
   id: number;
+  parent_id?: number | null;
   name: string;
   code?: string | null;
   is_active: boolean;
   sort_order: number;
+  children?: Category[];
 }
 
 export interface CategoryCreate {
+  parent_id?: number | null;
   name: string;
   code?: string | null;
   is_active: boolean;
@@ -203,6 +202,7 @@ export interface CategoryCreate {
 }
 
 export interface CategoryUpdate {
+  parent_id?: number | null;
   name?: string | null;
   code?: string | null;
   is_active?: boolean | null;
@@ -253,44 +253,18 @@ export interface RegionUpdate {
   sort_order?: number | null;
 }
 
-export interface Subcategory {
-  id: number;
-  category_id: number;
-  name: string;
-  code?: string | null;
-  is_active: boolean;
-  sort_order: number;
-  specialties?: Specialty[];
-}
-
-export interface SubcategoryCreate {
-  name: string;
-  code?: string | null;
-  is_active: boolean;
-  sort_order: number;
-}
-
-export interface SubcategoryUpdate {
-  name?: string | null;
-  code?: string | null;
-  is_active?: boolean | null;
-  sort_order?: number | null;
-}
-
-export interface CategoryTree extends Category {
-  subcategories: Subcategory[];
-}
-
 export interface Specialty {
   id: number;
-  subcategory_id: number;
+  parent_id?: number | null;
   name: string;
   code?: string | null;
   is_active: boolean;
   sort_order: number;
+  children?: Specialty[];
 }
 
 export interface SpecialtyCreate {
+  parent_id?: number | null;
   name: string;
   code?: string | null;
   is_active: boolean;
@@ -298,6 +272,7 @@ export interface SpecialtyCreate {
 }
 
 export interface SpecialtyUpdate {
+  parent_id?: number | null;
   name?: string | null;
   code?: string | null;
   is_active?: boolean | null;
@@ -306,13 +281,16 @@ export interface SpecialtyUpdate {
 
 export interface Title {
   id: number;
+  parent_id?: number | null;
   name: string;
   code?: string | null;
   is_active: boolean;
   sort_order: number;
+  children?: Title[];
 }
 
 export interface TitleCreate {
+  parent_id?: number | null;
   name: string;
   code?: string | null;
   is_active: boolean;
@@ -320,6 +298,7 @@ export interface TitleCreate {
 }
 
 export interface TitleUpdate {
+  parent_id?: number | null;
   name?: string | null;
   code?: string | null;
   is_active?: boolean | null;

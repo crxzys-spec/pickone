@@ -10,8 +10,8 @@ class Specialty(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("code", name="uq_specialty_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    subcategory_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str | None] = mapped_column(String(50))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

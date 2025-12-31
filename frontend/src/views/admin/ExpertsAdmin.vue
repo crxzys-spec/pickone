@@ -173,9 +173,6 @@
       <el-form-item :label="t('experts.form.phone')">
         <el-input v-model="form.phone" />
       </el-form-item>
-      <el-form-item :label="t('experts.form.email')">
-        <el-input v-model="form.email" />
-      </el-form-item>
       <el-form-item :label="t('experts.form.company')">
         <el-select
           v-model="form.organization_id"
@@ -209,37 +206,29 @@
         </el-select>
       </el-form-item>
       <el-form-item :label="t('experts.form.title')">
-        <el-select
+        <el-tree-select
           v-model="form.title_id"
+          :data="titleTreeOptions"
+          :props="titleTreeProps"
           clearable
           filterable
+          check-strictly
           style="width: 100%;"
           @change="handleTitleChange"
-        >
-          <el-option
-            v-for="title in titles"
-            :key="title.id"
-            :label="title.name"
-            :value="title.id"
-          />
-        </el-select>
+        />
       </el-form-item>
       <el-form-item :label="t('experts.form.specialties')">
-        <el-select
+        <el-tree-select
           v-model="form.specialty_ids"
+          :data="specialtyTreeOptions"
+          :props="specialtyTreeProps"
           multiple
           filterable
+          check-strictly
           collapse-tags
           collapse-tags-tooltip
           style="width: 100%;"
-        >
-          <el-option
-            v-for="option in specialtyOptions"
-            :key="option.id"
-            :label="option.label"
-            :value="option.id"
-          />
-        </el-select>
+        />
       </el-form-item>
       <el-form-item :label="t('experts.form.appointmentLetters')">
         <el-upload
@@ -393,6 +382,7 @@
 </template>
 
 <script setup lang="ts">
+import axios from "axios";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import {
   ElMessage,
@@ -428,9 +418,9 @@ import { uploadExpertCredential } from "../../services/uploads";
 import { listCategoryTree } from "../../services/categories";
 import { listOrganizationsAll } from "../../services/organizations";
 import { listRegionsAll } from "../../services/regions";
-import { listTitlesAll } from "../../services/titles";
+import { listTitleTree } from "../../services/titles";
 import type {
-  CategoryTree,
+  Category,
   Expert,
   Organization,
   Region,
@@ -443,7 +433,6 @@ interface ExpertForm {
   id_card_no: string;
   gender: string;
   phone: string;
-  email: string;
   company: string;
   organization_id: number | null;
   region_id: number | null;
@@ -457,10 +446,10 @@ interface ExpertForm {
 
 const experts = ref<Expert[]>([]);
 const tableRef = ref();
-const categoryTree = ref<CategoryTree[]>([]);
+const specialtyTree = ref<Category[]>([]);
 const organizations = ref<Organization[]>([]);
 const regions = ref<Region[]>([]);
-const titles = ref<Title[]>([]);
+const titleTree = ref<Title[]>([]);
 const loading = ref(false);
 const importing = ref(false);
 const exporting = ref(false);
@@ -484,7 +473,6 @@ const form = reactive<ExpertForm>({
   id_card_no: "",
   gender: "",
   phone: "",
-  email: "",
   company: "",
   organization_id: null,
   region_id: null,
@@ -569,7 +557,6 @@ function resetForm() {
   form.id_card_no = "";
   form.gender = "";
   form.phone = "";
-  form.email = "";
   form.company = "";
   form.organization_id = null;
   form.region_id = null;
@@ -604,10 +591,10 @@ function genderLabel(value?: string | null) {
   if (!value) {
     return "-";
   }
-  if (value === "男") {
+  if (value == "?" || value.toLowerCase() == "male") {
     return t("experts.gender.male");
   }
-  if (value === "女") {
+  if (value == "?" || value.toLowerCase() == "female") {
     return t("experts.gender.female");
   }
   return value;
@@ -640,7 +627,7 @@ async function refresh() {
 }
 
 async function refreshCategories() {
-  categoryTree.value = await listCategoryTree();
+  specialtyTree.value = await listCategoryTree();
 }
 
 async function refreshOrganizations() {
@@ -652,26 +639,65 @@ async function refreshRegions() {
 }
 
 async function refreshTitles() {
-  titles.value = await listTitlesAll();
+  titleTree.value = await listTitleTree();
 }
 
 
-const specialtyOptions = computed(() => {
-  const options: { id: number; label: string }[] = [];
-  categoryTree.value.forEach((category) => {
-    category.subcategories?.forEach((subcategory) => {
-      subcategory.specialties?.forEach((specialty) => {
-        const labelParts = [
-          category.name,
-          subcategory.name,
-          specialty.code ? `${specialty.code} ${specialty.name}` : specialty.name,
-        ];
-        options.push({ id: specialty.id, label: labelParts.join(" / ") });
-      });
-    });
+type TreeSource = {
+  id: number;
+  name: string;
+  code?: string | null;
+  children?: TreeSource[];
+};
+
+type TreeOption = {
+  id: number;
+  label: string;
+  is_leaf: boolean;
+  children?: TreeOption[];
+};
+
+function buildTreeOptions(nodes: TreeSource[]): TreeOption[] {
+  return (nodes ?? []).map((node) => {
+    const children = buildTreeOptions(node.children ?? []);
+    return {
+      id: node.id,
+      label: node.code ? `${node.code} ${node.name}` : node.name,
+      is_leaf: children.length === 0,
+      children: children.length > 0 ? children : undefined,
+    };
   });
-  return options;
-});
+}
+
+function flattenTree<T extends TreeSource>(nodes: T[]): T[] {
+  const result: T[] = [];
+  nodes.forEach((node) => {
+    result.push(node);
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenTree(node.children as T[]));
+    }
+  });
+  return result;
+}
+
+const specialtyTreeOptions = computed<TreeOption[]>(() =>
+  buildTreeOptions(specialtyTree.value),
+);
+
+const titleTreeOptions = computed<TreeOption[]>(() =>
+  buildTreeOptions(titleTree.value),
+);
+
+const titleFlat = computed(() => flattenTree(titleTree.value));
+
+const specialtyTreeProps = {
+  value: "id",
+  label: "label",
+  children: "children",
+  disabled: (data: TreeOption) => !data.is_leaf,
+};
+
+const titleTreeProps = specialtyTreeProps;
 
 function handleOrganizationChange() {
   const organization = organizations.value.find(
@@ -686,7 +712,7 @@ function handleRegionChange() {
 }
 
 function handleTitleChange() {
-  const selected = titles.value.find((item) => item.id === form.title_id);
+  const selected = titleFlat.value.find((item) => item.id === form.title_id);
   form.title = selected?.name ?? "";
 }
 
@@ -918,7 +944,7 @@ function resolveTitleId(expert: Expert): number | null {
   if (!expert.title) {
     return null;
   }
-  return titles.value.find((item) => item.name === expert.title)?.id ?? null;
+  return titleFlat.value.find((item) => item.name === expert.title)?.id ?? null;
 }
 
 function resolveRegionId(expert: Expert): number | null {
@@ -945,7 +971,6 @@ function openEdit(expert: Expert) {
   form.id_card_no = expert.id_card_no ?? "";
   form.gender = expert.gender ?? "";
   form.phone = expert.phone ?? "";
-  form.email = expert.email ?? "";
   form.organization_id = resolveOrganizationId(expert);
   form.region_id = resolveRegionId(expert);
   form.title_id = resolveTitleId(expert);
@@ -1001,7 +1026,6 @@ async function submitForm() {
     if (isEditing.value && editingId.value) {
       const payload: Record<string, unknown> = {
         gender: form.gender,
-        email: form.email,
         company: form.organization_id ? form.company : null,
         organization_id: form.organization_id,
         region_id: form.region_id,
@@ -1033,7 +1057,6 @@ async function submitForm() {
         id_card_no: form.id_card_no || null,
         gender: form.gender,
         phone: form.phone,
-        email: form.email,
         company: form.organization_id ? form.company : null,
         organization_id: form.organization_id,
         region_id: form.region_id,
@@ -1115,7 +1138,23 @@ async function handleImport(options: UploadRequestOptions) {
     await refresh();
     options.onSuccess?.(result);
   } catch (error) {
-    ElMessage.error(t("experts.messages.importFailed"));
+    if (axios.isAxiosError(error)) {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === "string" && detail.trim()) {
+        ElMessage.error(detail);
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0] as { msg?: string };
+        if (typeof first?.msg === "string" && first.msg.trim()) {
+          ElMessage.error(first.msg);
+        } else {
+          ElMessage.error(t("experts.messages.importFailed"));
+        }
+      } else {
+        ElMessage.error(t("experts.messages.importFailed"));
+      }
+    } else {
+      ElMessage.error(t("experts.messages.importFailed"));
+    }
     options.onError?.(error as Error);
   } finally {
     importing.value = false;

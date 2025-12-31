@@ -232,12 +232,7 @@ const canRules = computed(
 );
 const canCategories = computed(
   () =>
-    hasScope("category:read") ||
-    hasScope("category:write") ||
-    hasScope("subcategory:read") ||
-    hasScope("subcategory:write") ||
-    hasScope("specialty:read") ||
-    hasScope("specialty:write"),
+    hasScope("category:read") || hasScope("category:write"),
 );
 const canOrganizations = computed(
   () => hasScope("organization:read") || hasScope("organization:write"),

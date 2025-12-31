@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.codes import generate_code
-from app.models.draw import DrawApplication
 from app.models.expert_specialty import ExpertSpecialty
 from app.models.rule import Rule
 from app.models.specialty import Specialty
-from app.models.subcategory import Subcategory
 from app.repo.specialties import SpecialtyRepo
 from app.schemas.pagination import PageParams
 from app.schemas.specialty import SpecialtyCreate, SpecialtyUpdate
@@ -22,21 +22,56 @@ def _generate_unique_code(repo: SpecialtyRepo, prefix: str) -> str:
     return code
 
 
-def _in_use_detail(entity: str, rule_exists: bool, draw_exists: bool) -> str:
-    if rule_exists and draw_exists:
-        return f"{entity} is in use by rules, draws"
-    if rule_exists:
-        return f"{entity} is in use by rules"
-    if draw_exists:
-        return f"{entity} is in use by draws"
-    return f"{entity} is in use"
+def _normalize_ids(values: list[int] | None) -> list[int]:
+    unique: list[int] = []
+    for item in values or []:
+        try:
+            value = int(item)
+        except (TypeError, ValueError):
+            continue
+        if value not in unique:
+            unique.append(value)
+    return unique
 
 
-def list_specialties(
-    db: Session, subcategory_id: int, params: PageParams
-) -> tuple[list[Specialty], int]:
+def _sort_key(item: Specialty) -> tuple[int, str, str, int]:
+    code = (item.code or "").strip()
+    name = item.name.strip()
+    return (item.sort_order, code, name, item.id)
+
+
+def _build_tree(items: list[Specialty]) -> list[dict[str, object]]:
+    nodes: dict[int, dict[str, object]] = {}
+    children_map: dict[int | None, list[Specialty]] = defaultdict(list)
+    for item in items:
+        children_map[item.parent_id].append(item)
+
+    for item in items:
+        nodes[item.id] = {
+            "id": item.id,
+            "parent_id": item.parent_id,
+            "name": item.name,
+            "code": item.code,
+            "is_active": item.is_active,
+            "sort_order": item.sort_order,
+            "children": [],
+        }
+
+    def attach_children(parent_id: int | None) -> list[dict[str, object]]:
+        children = sorted(children_map.get(parent_id, []), key=_sort_key)
+        result: list[dict[str, object]] = []
+        for child in children:
+            node = nodes[child.id]
+            node["children"] = attach_children(child.id)
+            result.append(node)
+        return result
+
+    return attach_children(None)
+
+
+def list_specialties(db: Session, params: PageParams) -> tuple[list[Specialty], int]:
     return SpecialtyRepo(db).list_page(
-        subcategory_id,
+        None,
         params.keyword,
         params.sort_by,
         params.sort_order,
@@ -49,10 +84,9 @@ def list_specialties_all(db: Session) -> list[Specialty]:
     return SpecialtyRepo(db).list()
 
 
-def list_specialties_by_subcategory(
-    db: Session, subcategory_id: int
-) -> list[Specialty]:
-    return SpecialtyRepo(db).list_by_subcategory(subcategory_id)
+def list_specialty_tree(db: Session) -> list[SpecialtyTreeOut]:
+    items = SpecialtyRepo(db).list()
+    return _build_tree(items)
 
 
 def get_specialty(db: Session, specialty_id: int) -> Specialty:
@@ -64,166 +98,224 @@ def get_specialty(db: Session, specialty_id: int) -> Specialty:
     return specialty
 
 
-def _ensure_specialty_unique(
-    db: Session,
-    subcategory_id: int,
-    name: str | None,
-    code: str | None,
-    exclude_id: int | None = None,
+def _ensure_unique(
+    db: Session, code: str | None, exclude_id: int | None = None
 ) -> None:
-    repo = SpecialtyRepo(db)
-    if code:
-        existing = repo.get_by_code(code)
-        if existing and existing.id != exclude_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Specialty code already exists",
-            )
-
-
-def create_specialty(
-    db: Session, subcategory_id: int, payload: SpecialtyCreate
-) -> Specialty:
-    subcategory = db.execute(
-        select(Subcategory).where(Subcategory.id == subcategory_id)
-    ).scalar_one_or_none()
-    if subcategory is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Subcategory not found"
-        )
-    code = payload.code.strip() if payload.code else None
     if not code:
+        return
+    repo = SpecialtyRepo(db)
+    existing = repo.get_by_code(code)
+    if existing and existing.id != exclude_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Specialty code is required",
+            detail="Specialty code already exists",
         )
-    _ensure_specialty_unique(db, subcategory_id, payload.name, code)
+
+
+def _validate_parent(db: Session, parent_id: int | None, node_id: int | None = None) -> None:
+    if parent_id is None:
+        return
+    parent = SpecialtyRepo(db).get_by_id(parent_id)
+    if parent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Parent specialty not found"
+        )
+    if node_id is None:
+        return
+    parents = {item.id: item.parent_id for item in SpecialtyRepo(db).list()}
+    current = parent_id
+    while current is not None:
+        if current == node_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot set parent to descendant",
+            )
+        current = parents.get(current)
+
+
+def create_specialty(db: Session, payload: SpecialtyCreate) -> Specialty:
     data = payload.model_dump()
+    code = data.get("code")
+    if code:
+        code = code.strip()
+    if not code:
+        code = _generate_unique_code(SpecialtyRepo(db), "spec")
     data["code"] = code
-    specialty = Specialty(subcategory_id=subcategory_id, **data)
+    _ensure_unique(db, code)
+    _validate_parent(db, data.get("parent_id"))
+
+    specialty = Specialty(**data)
     db.add(specialty)
     db.commit()
     db.refresh(specialty)
     return specialty
 
 
-def update_specialty(
-    db: Session, specialty_id: int, payload: SpecialtyUpdate
-) -> Specialty:
+def update_specialty(db: Session, specialty_id: int, payload: SpecialtyUpdate) -> Specialty:
     specialty = get_specialty(db, specialty_id)
     update_data = payload.model_dump(exclude_unset=True)
     if "code" in update_data:
-        update_data["code"] = (
-            update_data["code"].strip() if update_data.get("code") else None
-        )
-    effective_code = update_data.get("code", specialty.code)
-    if not effective_code:
+        update_data["code"] = update_data["code"].strip() if update_data.get("code") else None
+    if "code" in update_data and not update_data.get("code"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Specialty code is required",
         )
-    _ensure_specialty_unique(
-        db,
-        specialty.subcategory_id,
-        update_data.get("name"),
-        effective_code,
-        exclude_id=specialty_id,
-    )
-
-    name_changed = "name" in update_data and update_data["name"] != specialty.name
+    _ensure_unique(db, update_data.get("code"), exclude_id=specialty_id)
+    if "parent_id" in update_data:
+        _validate_parent(db, update_data.get("parent_id"), node_id=specialty_id)
 
     for key, value in update_data.items():
         setattr(specialty, key, value)
-
-    if name_changed:
-        db.execute(
-            Rule.__table__.update()
-            .where(Rule.specialty_id == specialty_id)
-            .values(specialty=specialty.name)
-        )
-        db.execute(
-            DrawApplication.__table__.update()
-            .where(DrawApplication.specialty_id == specialty_id)
-            .values(specialty=specialty.name)
-        )
 
     db.commit()
     db.refresh(specialty)
     return specialty
 
 
+def _collect_descendant_ids(items: list[Specialty], target_ids: list[int]) -> list[int]:
+    children_map: dict[int | None, list[int]] = defaultdict(list)
+    for item in items:
+        children_map[item.parent_id].append(item.id)
+    seen: set[int] = set()
+    ordered: list[int] = []
+
+    def walk(node_id: int) -> None:
+        if node_id in seen:
+            return
+        seen.add(node_id)
+        ordered.append(node_id)
+        for child_id in children_map.get(node_id, []):
+            walk(child_id)
+
+    for node_id in target_ids:
+        walk(node_id)
+
+    return ordered
+
+
+def _cleanup_rules_for_specialties(db: Session, specialty_ids: set[int]) -> None:
+    if not specialty_ids:
+        return
+    rules = db.execute(select(Rule)).scalars().all()
+    if not rules:
+        return
+    specialties = {item.id: item for item in SpecialtyRepo(db).list()}
+    for rule in rules:
+        current = _normalize_ids(rule.specialty_ids)
+        if not current:
+            continue
+        if not specialty_ids.intersection(current):
+            continue
+        remaining = [item for item in current if item not in specialty_ids]
+        rule.specialty_ids = remaining
+        names = [specialties[item].name for item in remaining if item in specialties]
+        rule.specialty = ";".join(names) if names else None
+        rule.specialty_id = remaining[0] if len(remaining) == 1 else None
+
+
 def delete_specialty(db: Session, specialty_id: int) -> None:
-    specialty = get_specialty(db, specialty_id)
-    rule_exists = (
-        db.execute(
-            select(Rule.id).where(
-                (Rule.specialty_id == specialty_id)
-                | (Rule.specialty == specialty.name)
-            )
-        ).first()
-        is not None
-    )
-    draw_exists = (
-        db.execute(
-            select(DrawApplication.id).where(
-                (DrawApplication.specialty_id == specialty_id)
-                | (DrawApplication.specialty == specialty.name)
-            )
-        ).first()
-        is not None
-    )
-    if rule_exists or draw_exists:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_in_use_detail("Specialty", rule_exists, draw_exists),
-        )
+    items = SpecialtyRepo(db).list()
+    existing = {item.id for item in items}
+    if specialty_id not in existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specialty not found")
+    to_delete = _collect_descendant_ids(items, [specialty_id])
+    delete_ids = set(to_delete)
 
     db.execute(
-        ExpertSpecialty.__table__.delete().where(
-            ExpertSpecialty.specialty_id == specialty_id
-        )
+        delete(ExpertSpecialty).where(ExpertSpecialty.specialty_id.in_(delete_ids))
     )
-    db.delete(specialty)
+    _cleanup_rules_for_specialties(db, delete_ids)
+    db.execute(delete(Specialty).where(Specialty.id.in_(delete_ids)))
     db.commit()
 
 
-def resolve_specialty(
-    db: Session,
-    specialty_id: int | None,
-    specialty_name: str | None,
-    subcategory_id: int | None,
-    strict: bool = True,
-    create_if_missing: bool = False,
-) -> Specialty | None:
-    repo = SpecialtyRepo(db)
-    specialty = None
-    if specialty_id is not None:
-        specialty = repo.get_by_id(specialty_id)
-        if specialty is None and strict:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Specialty not found"
-            )
-    elif specialty_name:
-        if subcategory_id is None:
-            if strict:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Subcategory is required for specialty",
-                )
-            return None
-        specialty = repo.get_by_subcategory_and_name(subcategory_id, specialty_name)
-        if specialty is None and strict:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Specialty not found"
-            )
-        if specialty is None and create_if_missing:
-            specialty = Specialty(
-                subcategory_id=subcategory_id,
-                name=specialty_name,
-                code=_generate_unique_code(repo, "spec"),
-                is_active=True,
-                sort_order=0,
-            )
-            db.add(specialty)
-            db.flush()
-    return specialty
+def batch_specialties(
+    db: Session, action: str, specialty_ids: list[int]
+) -> dict[str, int | list[dict[str, object]]]:
+    items = SpecialtyRepo(db).list()
+    existing = {item.id for item in items}
+    unique_ids = [item for item in _normalize_ids(specialty_ids) if item in existing]
+    if not unique_ids:
+        return {"updated": 0, "deleted": 0, "skipped": len(set(specialty_ids)), "errors": []}
+
+    if action in {"enable", "disable"}:
+        is_active = action == "enable"
+        target_ids = set(_collect_descendant_ids(items, unique_ids))
+        db.execute(
+            Specialty.__table__.update()
+            .where(Specialty.id.in_(target_ids))
+            .values(is_active=is_active)
+        )
+        db.commit()
+        return {"updated": len(target_ids), "deleted": 0, "skipped": 0, "errors": []}
+
+    if action == "delete":
+        target_ids = set(_collect_descendant_ids(items, unique_ids))
+        db.execute(
+            delete(ExpertSpecialty).where(ExpertSpecialty.specialty_id.in_(target_ids))
+        )
+        _cleanup_rules_for_specialties(db, target_ids)
+        db.execute(delete(Specialty).where(Specialty.id.in_(target_ids)))
+        db.commit()
+        return {"updated": 0, "deleted": len(target_ids), "skipped": 0, "errors": []}
+
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action")
+
+
+def resolve_specialty_by_code(db: Session, code: str) -> Specialty | None:
+    return SpecialtyRepo(db).get_by_code(code)
+
+
+def expand_to_leaf_ids(db: Session, selected_ids: list[int]) -> list[int]:
+    normalized = _normalize_ids(selected_ids)
+    if not normalized:
+        return []
+    items = SpecialtyRepo(db).list()
+    existing = {item.id for item in items}
+    missing = [str(item) for item in normalized if item not in existing]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Specialty not found: {', '.join(missing)}",
+        )
+    children_map: dict[int | None, list[int]] = defaultdict(list)
+    for item in items:
+        children_map[item.parent_id].append(item.id)
+    leaf_ids: set[int] = set()
+
+    def walk(node_id: int) -> None:
+        children = children_map.get(node_id, [])
+        if not children:
+            leaf_ids.add(node_id)
+            return
+        for child_id in children:
+            walk(child_id)
+
+    for node_id in normalized:
+        walk(node_id)
+
+    return list(leaf_ids)
+
+
+def ensure_leaf_ids(db: Session, specialty_ids: list[int]) -> None:
+    normalized = _normalize_ids(specialty_ids)
+    if not normalized:
+        return
+    items = SpecialtyRepo(db).list()
+    existing = {item.id for item in items}
+    missing = [str(item) for item in normalized if item not in existing]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Specialty not found: {', '.join(missing)}",
+        )
+    children_map: dict[int | None, list[int]] = defaultdict(list)
+    for item in items:
+        children_map[item.parent_id].append(item.id)
+    non_leaf = [item for item in normalized if children_map.get(item)]
+    if non_leaf:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Specialty must be a leaf",
+        )

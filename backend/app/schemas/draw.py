@@ -82,7 +82,6 @@ class DrawResultExpert(BaseModel):
     name: str
     company: str | None = None
     phone: str | None = None
-    email: str | None = None
     title: str | None = None
     specialties: list[SpecialtyOut] = Field(default_factory=list)
     specialty_ids: list[int] = Field(default_factory=list)

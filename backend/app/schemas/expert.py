@@ -8,7 +8,6 @@ class ExpertBase(BaseModel):
     id_card_no: str
     gender: str | None = None
     phone: str | None = None
-    email: str | None = None
     company: str | None = None
     organization_id: int | None = None
     region_id: int | None = None
@@ -28,7 +27,6 @@ class ExpertUpdate(BaseModel):
     id_card_no: str | None = Field(default=None, min_length=1)
     gender: str | None = None
     phone: str | None = None
-    email: str | None = None
     company: str | None = None
     organization_id: int | None = None
     region_id: int | None = None
