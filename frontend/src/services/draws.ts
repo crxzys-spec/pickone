@@ -3,6 +3,8 @@ import type { ListParams, Page } from "../types/pagination";
 import type {
   DrawApplication,
   DrawApply,
+  DrawResultContact,
+  DrawResultContactUpdate,
   DrawResultOut,
   DrawUpdate,
 } from "../types/domain";
@@ -60,8 +62,34 @@ export async function replaceDrawResult(drawId: number, resultId: number) {
   return data;
 }
 
+export async function getDrawResultContact(drawId: number, resultId: number) {
+  const { data } = await http.get<DrawResultContact>(
+    `/draws/${drawId}/results/${resultId}/contact`,
+  );
+  return data;
+}
+
+export async function updateDrawResultContact(
+  drawId: number,
+  resultId: number,
+  payload: DrawResultContactUpdate,
+) {
+  const { data } = await http.put<DrawResultOut[]>(
+    `/draws/${drawId}/results/${resultId}/contact`,
+    payload,
+  );
+  return data;
+}
+
 export async function exportDrawResults(drawId: number) {
   const response = await http.get<Blob>(`/draws/${drawId}/export`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export async function exportDrawSignin(drawId: number) {
+  const response = await http.get<Blob>(`/draws/${drawId}/export-signin`, {
     responseType: "blob",
   });
   return response.data;

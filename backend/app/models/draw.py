@@ -20,6 +20,7 @@ class DrawApplication(Base, TimestampMixin):
     project_name: Mapped[str | None] = mapped_column(String(255), index=True)
     project_code: Mapped[str | None] = mapped_column(String(120), index=True)
     expert_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     backup_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     draw_method: Mapped[str] = mapped_column(
         String(50), default="random", nullable=False
@@ -57,6 +58,7 @@ class DrawResult(Base, TimestampMixin):
     is_replacement: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    contact_status: Mapped[str | None] = mapped_column(String(20))
     ordinal: Mapped[int | None] = mapped_column(Integer)
 
     draw = relationship("DrawApplication", back_populates="results")

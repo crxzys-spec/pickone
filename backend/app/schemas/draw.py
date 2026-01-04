@@ -15,6 +15,7 @@ class DrawApply(BaseModel):
     project_name: str | None = None
     project_code: str | None = None
     expert_count: int
+    total_count: int | None = None
     backup_count: int = 0
     draw_method: str = "random"
     review_time: datetime | None = None
@@ -37,6 +38,7 @@ class DrawOut(BaseModel):
     project_name: str | None = None
     project_code: str | None = None
     expert_count: int
+    total_count: int
     backup_count: int
     draw_method: str
     review_time: datetime | None = None
@@ -57,6 +59,7 @@ class DrawUpdate(BaseModel):
     project_name: str | None = None
     project_code: str | None = None
     expert_count: int | None = None
+    total_count: int | None = None
     backup_count: int | None = None
     draw_method: str | None = None
     review_time: datetime | None = None
@@ -119,9 +122,20 @@ class DrawResultOut(BaseModel):
     expert_id: int
     is_backup: bool
     is_replacement: bool = False
+    contact_status: str | None = None
     ordinal: int | None = None
     expert: DrawResultExpert | None = None
 
 
 class DrawExecuteResult(BaseModel):
     results: list[DrawResultOut] = Field(default_factory=list)
+
+
+class DrawResultContactOut(BaseModel):
+    name: str
+    phone: str | None = None
+
+
+class DrawResultContactUpdate(BaseModel):
+    status: str
+    auto_replace: bool = False

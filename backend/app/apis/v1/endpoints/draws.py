@@ -9,6 +9,8 @@ from app.schemas.draw import (
     DrawBatchDelete,
     DrawOut,
     DrawReplace,
+    DrawResultContactOut,
+    DrawResultContactUpdate,
     DrawResultOut,
     DrawUpdate,
 )
@@ -142,6 +144,37 @@ def replace_draw_result(
 
 
 @router.get(
+    "/{draw_id}/results/{result_id}/contact",
+    dependencies=[Depends(require_scopes(["draw:execute"]))],
+    response_model=DrawResultContactOut,
+)
+def get_draw_result_contact(
+    draw_id: int,
+    result_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return draw_service.get_draw_result_contact(db, draw_id, result_id)
+
+
+@router.put(
+    "/{draw_id}/results/{result_id}/contact",
+    dependencies=[Depends(require_scopes(["draw:execute"]))],
+    response_model=list[DrawResultOut],
+)
+def update_draw_result_contact(
+    draw_id: int,
+    result_id: int,
+    payload: DrawResultContactUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return draw_service.update_draw_result_contact(
+        db, draw_id, result_id, payload.status, payload.auto_replace
+    )
+
+
+@router.get(
     "/{draw_id}/export",
     dependencies=[Depends(require_scopes(["draw:read"]))],
 )
@@ -156,5 +189,24 @@ def export_draw_results(
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@router.get(
+    "/{draw_id}/export-signin",
+    dependencies=[Depends(require_scopes(["draw:read"]))],
+)
+def export_draw_signin(
+    draw_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    output = draw_service.export_signin_sheet(db, draw_id)
+    filename = f"draw_signin_{draw_id}.docx"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers=headers,
     )

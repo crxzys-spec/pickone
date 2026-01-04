@@ -114,6 +114,7 @@ export interface DrawApplication {
   project_name?: string | null;
   project_code?: string | null;
   expert_count: number;
+  total_count: number;
   backup_count: number;
   draw_method: string;
   review_time?: string | null;
@@ -134,6 +135,7 @@ export interface DrawApply {
   project_name?: string | null;
   project_code?: string | null;
   expert_count: number;
+  total_count?: number | null;
   backup_count: number;
   draw_method: string;
   review_time?: string | null;
@@ -153,6 +155,7 @@ export interface DrawUpdate {
   project_name?: string | null;
   project_code?: string | null;
   expert_count?: number | null;
+  total_count?: number | null;
   backup_count?: number | null;
   draw_method?: string | null;
   review_time?: string | null;
@@ -179,8 +182,19 @@ export interface DrawResultOut {
   expert_id: number;
   is_backup: boolean;
   is_replacement: boolean;
+  contact_status?: string | null;
   ordinal?: number | null;
   expert?: DrawResultExpert | null;
+}
+
+export interface DrawResultContact {
+  name: string;
+  phone?: string | null;
+}
+
+export interface DrawResultContactUpdate {
+  status: string;
+  auto_replace?: boolean;
 }
 
 export interface Category {

@@ -71,6 +71,12 @@
         sortable="custom"
       />
       <el-table-column
+        :label="t('draws.columns.total')"
+        prop="total_count"
+        width="100"
+        sortable="custom"
+      />
+      <el-table-column
         :label="t('draws.columns.backup')"
         prop="backup_count"
         width="90"
@@ -110,7 +116,7 @@
           <el-button
             link
             type="success"
-            :disabled="row.status === 'completed'"
+            :disabled="row.status !== 'pending'"
             @click="confirmExecute(row)"
           >
             {{ t("common.execute") }}
@@ -139,6 +145,9 @@
     <el-form :model="form" label-width="120px">
       <el-form-item :label="t('draws.form.expertCount')" required>
         <el-input-number v-model="form.expert_count" :min="1" />
+      </el-form-item>
+      <el-form-item :label="t('draws.form.totalCount')" required>
+        <el-input-number v-model="form.total_count" :min="form.expert_count" />
       </el-form-item>
       <el-form-item :label="t('draws.form.backupCount')">
         <el-input-number v-model="form.backup_count" :min="0" />
@@ -246,6 +255,13 @@
       >
         {{ t("common.export") }}
       </el-button>
+      <el-button
+        :loading="exportingSignin"
+        :disabled="!activeDrawId"
+        @click="handleExportSignin"
+      >
+        {{ t("draws.actions.exportSignin") }}
+      </el-button>
       <el-input
         v-model="resultsKeyword"
         :placeholder="t('experts.searchPlaceholder')"
@@ -285,8 +301,23 @@
           {{ maskPhone(row.expert?.phone) || "-" }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('draws.results.columns.actions')" width="140">
+      <el-table-column :label="t('draws.results.columns.contactStatus')" width="120">
         <template #default="{ row }">
+          <el-tag
+            v-if="!row.is_backup"
+            :type="contactStatusType(row.contact_status)"
+            class="tag"
+          >
+            {{ contactStatusLabel(row.contact_status) }}
+          </el-tag>
+          <span v-else class="muted">-</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('draws.results.columns.actions')" width="200">
+        <template #default="{ row }">
+          <el-button v-if="!row.is_backup" link type="primary" @click="openContact(row)">
+            {{ t("draws.actions.contact") }}
+          </el-button>
           <el-button
             v-if="!row.is_backup"
             link
@@ -317,6 +348,47 @@
       </el-button>
     </template>
   </el-dialog>
+
+  <el-dialog v-model="contactVisible" :title="t('draws.actions.contact')" width="520px">
+    <div v-loading="contactLoading" class="contact-body">
+      <el-descriptions :column="1" border>
+        <el-descriptions-item :label="t('draws.contact.name')">
+          {{ contactInfo?.name || "-" }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('draws.contact.phone')">
+          {{ contactInfo?.phone || "-" }}
+        </el-descriptions-item>
+      </el-descriptions>
+      <div class="contact-status">
+        <span class="label">{{ t("draws.contact.status") }}</span>
+        <el-tag :type="contactStatusType(contactTarget?.contact_status)">
+          {{ contactStatusLabel(contactTarget?.contact_status) }}
+        </el-tag>
+      </div>
+      <el-checkbox v-model="contactAutoReplace" :disabled="!hasBackup">
+        {{ t("draws.contact.autoReplace") }}
+      </el-checkbox>
+    </div>
+    <template #footer>
+      <el-button @click="contactVisible = false">
+        {{ t("common.cancel") }}
+      </el-button>
+      <el-button
+        type="danger"
+        :loading="contactSubmitting"
+        @click="submitContact('rejected')"
+      >
+        {{ t("draws.actions.reject") }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="contactSubmitting"
+        @click="submitContact('accepted')"
+      >
+        {{ t("draws.actions.accept") }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -330,10 +402,13 @@ import {
   deleteDraw,
   deleteDraws,
   executeDraw,
+  exportDrawSignin,
   exportDrawResults,
+  getDrawResultContact,
   listDrawResults,
   listDraws,
   replaceDrawResult,
+  updateDrawResultContact,
   updateDraw,
 } from "../../services/draws";
 import { listExpertsAll } from "../../services/experts";
@@ -341,6 +416,7 @@ import { listOrganizationsAll } from "../../services/organizations";
 import { listRulesAll } from "../../services/rules";
 import type {
   DrawApplication,
+  DrawResultContact,
   DrawResultOut,
   Expert,
   Organization,
@@ -350,6 +426,7 @@ import { maskIdCard, maskName, maskPhone } from "../../utils/mask";
 
 interface DrawForm {
   expert_count: number;
+  total_count: number;
   backup_count: number;
   draw_method: string;
   review_time: string;
@@ -385,6 +462,7 @@ const resultsVisible = ref(false);
 const results = ref<DrawResultOut[]>([]);
 const resultsKeyword = ref("");
 const exportingResults = ref(false);
+const exportingSignin = ref(false);
 const resultsPage = ref(1);
 const resultsPageSize = ref(10);
 const resultsTotal = ref(0);
@@ -392,9 +470,16 @@ const resultsSortBy = ref<string | undefined>();
 const resultsSortOrder = ref<"asc" | "desc" | undefined>();
 const hasBackup = ref(false);
 const activeDrawId = ref<number | null>(null);
+const contactVisible = ref(false);
+const contactLoading = ref(false);
+const contactSubmitting = ref(false);
+const contactInfo = ref<DrawResultContact | null>(null);
+const contactTarget = ref<DrawResultOut | null>(null);
+const contactAutoReplace = ref(true);
 
 const form = reactive<DrawForm>({
   expert_count: 1,
+  total_count: 1,
   backup_count: 0,
   draw_method: "random",
   review_time: "",
@@ -434,8 +519,18 @@ watch(resultsKeyword, () => {
   }, 300);
 });
 
+watch(
+  () => form.expert_count,
+  (value) => {
+    if (form.total_count < value) {
+      form.total_count = value;
+    }
+  },
+);
+
 function resetForm() {
   form.expert_count = 1;
+  form.total_count = 1;
   form.backup_count = 0;
   form.draw_method = "random";
   form.review_time = "";
@@ -472,6 +567,26 @@ function statusLabel(value: string) {
     return t("draws.status.pending");
   }
   return value;
+}
+
+function contactStatusLabel(value?: string | null) {
+  if (value === "accepted") {
+    return t("draws.results.status.accepted");
+  }
+  if (value === "rejected") {
+    return t("draws.results.status.rejected");
+  }
+  return t("draws.results.status.pending");
+}
+
+function contactStatusType(value?: string | null) {
+  if (value === "accepted") {
+    return "success";
+  }
+  if (value === "rejected") {
+    return "danger";
+  }
+  return "info";
 }
 
 function splitValues(value: string | null | undefined) {
@@ -598,6 +713,48 @@ async function refreshResults() {
   }
 }
 
+async function openContact(result: DrawResultOut) {
+  if (!activeDrawId.value || result.is_backup) {
+    return;
+  }
+  contactVisible.value = true;
+  contactLoading.value = true;
+  contactSubmitting.value = false;
+  contactTarget.value = result;
+  contactInfo.value = null;
+  contactAutoReplace.value = hasBackup.value;
+  try {
+    contactInfo.value = await getDrawResultContact(activeDrawId.value, result.id);
+  } catch (error) {
+    ElMessage.error(resolveErrorMessage(error, t("draws.messages.contactLoadFailed")));
+    contactVisible.value = false;
+  } finally {
+    contactLoading.value = false;
+  }
+}
+
+async function submitContact(status: "accepted" | "rejected") {
+  if (!activeDrawId.value || !contactTarget.value) {
+    return;
+  }
+  contactSubmitting.value = true;
+  try {
+    await updateDrawResultContact(activeDrawId.value, contactTarget.value.id, {
+      status,
+      auto_replace:
+        status === "rejected" && contactAutoReplace.value && hasBackup.value,
+    });
+    ElMessage.success(t("draws.messages.contactUpdated"));
+    contactVisible.value = false;
+    await refreshResults();
+    await refresh();
+  } catch (error) {
+    ElMessage.error(resolveErrorMessage(error, t("draws.messages.contactFailed")));
+  } finally {
+    contactSubmitting.value = false;
+  }
+}
+
 async function handleExportResults() {
   if (!activeDrawId.value) {
     return;
@@ -618,6 +775,26 @@ async function handleExportResults() {
   }
 }
 
+async function handleExportSignin() {
+  if (!activeDrawId.value) {
+    return;
+  }
+  exportingSignin.value = true;
+  try {
+    const blob = await exportDrawSignin(activeDrawId.value);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `draw_signin_${activeDrawId.value}.docx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    ElMessage.error(t("draws.messages.exportFailed"));
+  } finally {
+    exportingSignin.value = false;
+  }
+}
+
 function openCreate() {
   resetForm();
   isEditing.value = false;
@@ -629,6 +806,7 @@ function openEdit(draw: DrawApplication) {
   isEditing.value = true;
   editingId.value = draw.id;
   form.expert_count = draw.expert_count;
+  form.total_count = draw.total_count ?? draw.expert_count;
   form.backup_count = draw.backup_count ?? 0;
   form.draw_method = draw.draw_method;
   form.review_time = draw.review_time ?? "";
@@ -647,12 +825,17 @@ async function submitForm() {
     ElMessage.error(t("draws.messages.ruleRequired"));
     return;
   }
+  if (form.total_count < form.expert_count) {
+    ElMessage.error(t("draws.messages.totalLessThanCount"));
+    return;
+  }
   const avoidUnitsValue = joinValues(form.avoid_unit_ids);
   const avoidPersonsValue = joinValues(form.avoid_person_ids);
   try {
     if (isEditing.value && editingId.value) {
       await updateDraw(editingId.value, {
         expert_count: form.expert_count,
+        total_count: form.total_count,
         backup_count: form.backup_count,
         draw_method: form.draw_method,
         review_time: form.review_time || null,
@@ -668,6 +851,7 @@ async function submitForm() {
     } else {
       await createDraw({
         expert_count: form.expert_count,
+        total_count: form.total_count,
         backup_count: form.backup_count,
         draw_method: form.draw_method,
         review_time: form.review_time || null,
@@ -939,5 +1123,22 @@ function handleResultsPageSizeChange(value: number) {
 
 .results-pager {
   margin-top: 12px;
+}
+
+.contact-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contact-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contact-status .label {
+  color: #5b6b7a;
+  font-size: 14px;
 }
 </style>
