@@ -41,7 +41,12 @@ def upgrade() -> None:
             "UPDATE draw_applications SET total_count = expert_count WHERE total_count IS NULL"
         )
         if dialect != "sqlite":
-            op.alter_column("draw_applications", "total_count", nullable=False)
+            op.alter_column(
+                "draw_applications",
+                "total_count",
+                existing_type=sa.Integer(),
+                nullable=False,
+            )
 
 
 def downgrade() -> None:
