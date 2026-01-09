@@ -144,13 +144,13 @@ def downgrade() -> None:
                 sa.Column(
                     "created_at",
                     sa.DateTime(timezone=True),
-                    server_default=sa.text("(CURRENT_TIMESTAMP)"),
+                    server_default=sa.text("CURRENT_TIMESTAMP"),
                     nullable=False,
                 ),
                 sa.Column(
                     "updated_at",
                     sa.DateTime(timezone=True),
-                    server_default=sa.text("(CURRENT_TIMESTAMP)"),
+                    server_default=sa.text("CURRENT_TIMESTAMP"),
                     nullable=False,
                 ),
                 sa.PrimaryKeyConstraint("id"),
@@ -170,13 +170,13 @@ def downgrade() -> None:
                 sa.Column(
                     "created_at",
                     sa.DateTime(timezone=True),
-                    server_default=sa.text("(CURRENT_TIMESTAMP)"),
+                    server_default=sa.text("CURRENT_TIMESTAMP"),
                     nullable=False,
                 ),
                 sa.Column(
                     "updated_at",
                     sa.DateTime(timezone=True),
-                    server_default=sa.text("(CURRENT_TIMESTAMP)"),
+                    server_default=sa.text("CURRENT_TIMESTAMP"),
                     nullable=False,
                 ),
                 sa.PrimaryKeyConstraint("id"),
@@ -243,13 +243,13 @@ def downgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
@@ -268,13 +268,13 @@ def downgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
