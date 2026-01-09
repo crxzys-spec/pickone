@@ -54,12 +54,6 @@ export default {
     missing: "请输入用户名和密码。",
     failed: "登录失败。",
   },
-  home: {
-    title: "PickOne",
-    subtitle: "项目骨架已就绪。",
-    login: "登录",
-    admin: "管理台",
-  },
     profile: {
       title: "我的资料",
       subtitle: "当前账号信息。",

@@ -54,12 +54,6 @@ export default {
     missing: "Please enter username and password.",
     failed: "Login failed.",
   },
-  home: {
-    title: "PickOne",
-    subtitle: "Project scaffold is ready.",
-    login: "Login",
-    admin: "Admin",
-  },
     profile: {
       title: "My Profile",
       subtitle: "Current account information.",

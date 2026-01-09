@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-const HomeView = () => import("../views/Home.vue");
 const LoginView = () => import("../views/Login.vue");
 const AdminLayout = () => import("../views/admin/AdminLayout.vue");
 const DrawsAdmin = () => import("../views/admin/DrawsAdmin.vue");
@@ -17,8 +16,7 @@ const TitlesAdmin = () => import("../views/admin/TitlesAdmin.vue");
 const routes = [
   {
     path: "/",
-    name: "home",
-    component: HomeView,
+    redirect: "/admin/draws",
   },
   {
     path: "/login",
