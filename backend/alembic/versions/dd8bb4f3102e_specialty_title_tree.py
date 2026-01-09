@@ -91,32 +91,90 @@ def upgrade() -> None:
             op.drop_table("categories")
         return
 
-    op.drop_index("ix_specialties_subcategory_id", table_name="specialties")
-    op.drop_constraint(
-        "uq_specialty_subcategory_name", "specialties", type_="unique"
-    )
-    op.add_column("specialties", sa.Column("parent_id", sa.Integer(), nullable=True))
-    op.drop_column("specialties", "subcategory_id")
-    op.create_index("ix_specialties_parent_id", "specialties", ["parent_id"], unique=False)
-    op.create_unique_constraint("uq_specialty_code", "specialties", ["code"])
+    inspector = sa.inspect(conn)
 
-    op.drop_index("ix_titles_name", table_name="titles")
-    op.add_column("titles", sa.Column("parent_id", sa.Integer(), nullable=True))
-    op.create_index("ix_titles_parent_id", "titles", ["parent_id"], unique=False)
-    op.create_index("ix_titles_name", "titles", ["name"], unique=False)
+    def table_exists(name: str) -> bool:
+        return name in inspector.get_table_names()
 
-    op.drop_index("ix_experts_category", table_name="experts")
-    op.drop_index("ix_experts_subcategory", table_name="experts")
-    op.drop_index("ix_experts_category_id", table_name="experts")
-    op.drop_index("ix_experts_subcategory_id", table_name="experts")
-    op.drop_column("experts", "email")
-    op.drop_column("experts", "category_id")
-    op.drop_column("experts", "category")
-    op.drop_column("experts", "subcategory_id")
-    op.drop_column("experts", "subcategory")
+    def column_exists(table: str, column: str) -> bool:
+        return any(col["name"] == column for col in inspector.get_columns(table))
 
-    op.drop_table("subcategories")
-    op.drop_table("categories")
+    def index_exists(table: str, index: str) -> bool:
+        return any(idx["name"] == index for idx in inspector.get_indexes(table))
+
+    def unique_exists(table: str, constraint: str) -> bool:
+        return any(
+            uc["name"] == constraint
+            for uc in inspector.get_unique_constraints(table)
+        )
+
+    def constraint_exists(table: str, constraint: str) -> bool:
+        return unique_exists(table, constraint) or index_exists(table, constraint)
+
+    if table_exists("specialties"):
+        if index_exists("specialties", "ix_specialties_subcategory_id"):
+            op.drop_index(
+                "ix_specialties_subcategory_id", table_name="specialties"
+            )
+        if constraint_exists("specialties", "uq_specialty_subcategory_name"):
+            op.drop_constraint(
+                "uq_specialty_subcategory_name", "specialties", type_="unique"
+            )
+        if not column_exists("specialties", "parent_id"):
+            op.add_column(
+                "specialties", sa.Column("parent_id", sa.Integer(), nullable=True)
+            )
+        if column_exists("specialties", "subcategory_id"):
+            op.drop_column("specialties", "subcategory_id")
+        if not index_exists("specialties", "ix_specialties_parent_id"):
+            op.create_index(
+                "ix_specialties_parent_id",
+                "specialties",
+                ["parent_id"],
+                unique=False,
+            )
+        if not unique_exists("specialties", "uq_specialty_code"):
+            op.create_unique_constraint(
+                "uq_specialty_code", "specialties", ["code"]
+            )
+
+    if table_exists("titles"):
+        if index_exists("titles", "ix_titles_name"):
+            op.drop_index("ix_titles_name", table_name="titles")
+        if not column_exists("titles", "parent_id"):
+            op.add_column(
+                "titles", sa.Column("parent_id", sa.Integer(), nullable=True)
+            )
+        if not index_exists("titles", "ix_titles_parent_id"):
+            op.create_index(
+                "ix_titles_parent_id", "titles", ["parent_id"], unique=False
+            )
+        if not index_exists("titles", "ix_titles_name"):
+            op.create_index("ix_titles_name", "titles", ["name"], unique=False)
+
+    if table_exists("experts"):
+        for index_name in (
+            "ix_experts_category",
+            "ix_experts_subcategory",
+            "ix_experts_category_id",
+            "ix_experts_subcategory_id",
+        ):
+            if index_exists("experts", index_name):
+                op.drop_index(index_name, table_name="experts")
+        for column in (
+            "email",
+            "category_id",
+            "category",
+            "subcategory_id",
+            "subcategory",
+        ):
+            if column_exists("experts", column):
+                op.drop_column("experts", column)
+
+    if table_exists("subcategories"):
+        op.drop_table("subcategories")
+    if table_exists("categories"):
+        op.drop_table("categories")
 
 
 def downgrade() -> None:
