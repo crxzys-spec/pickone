@@ -506,7 +506,7 @@ def import_experts(db: Session, file) -> dict[str, int]:
 
     created = 0
     skipped = 0
-    with db.begin():
+    try:
         for row_index, row in enumerate(rows, start=2):
             if not row or all(cell is None for cell in row):
                 continue
@@ -629,6 +629,10 @@ def import_experts(db: Session, file) -> dict[str, int]:
             appointment_letter_urls = _split_list(data.get("appointment_letter_urls"))
             _sync_expert_documents(db, expert.id, appointment_letter_urls)
             created += 1
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {"created": created, "skipped": skipped}
 
