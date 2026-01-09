@@ -506,130 +506,130 @@ def import_experts(db: Session, file) -> dict[str, int]:
 
     created = 0
     skipped = 0
-    for row_index, row in enumerate(rows, start=2):
-        if not row or all(cell is None for cell in row):
-            continue
-        data: dict[str, object | None] = {}
-        for idx, field in index_to_field.items():
-            value = row[idx] if idx < len(row) else None
-            data[field] = value
+    with db.begin():
+        for row_index, row in enumerate(rows, start=2):
+            if not row or all(cell is None for cell in row):
+                continue
+            data: dict[str, object | None] = {}
+            for idx, field in index_to_field.items():
+                value = row[idx] if idx < len(row) else None
+                data[field] = value
 
-        name = _coerce_str(data.get("name"))
-        if not name:
-            skipped += 1
-            continue
+            name = _coerce_str(data.get("name"))
+            if not name:
+                skipped += 1
+                continue
 
-        id_card_no = _coerce_str(data.get("id_card_no"))
-        if not id_card_no:
-            skipped += 1
-            continue
-        existing = db.execute(
-            select(Expert.id).where(Expert.id_card_no == id_card_no)
-        ).first()
-        if existing:
-            skipped += 1
-            continue
+            id_card_no = _coerce_str(data.get("id_card_no"))
+            if not id_card_no:
+                skipped += 1
+                continue
+            existing = db.execute(
+                select(Expert.id).where(Expert.id_card_no == id_card_no)
+            ).first()
+            if existing:
+                skipped += 1
+                continue
 
-        region_name = _coerce_str(data.get("region"))
-        expert = Expert(
-            name=name,
-            id_card_no=id_card_no,
-            gender=_coerce_str(data.get("gender")),
-            phone=_coerce_str(data.get("phone")),
-            company=_coerce_str(data.get("company")),
-            region=region_name,
-            title=_coerce_str(data.get("title")),
-            is_active=_coerce_bool(data.get("is_active"), True),
-        )
-        organization = organization_service.resolve_organization(
-            db,
-            None,
-            expert.company,
-            strict=False,
-            create_if_missing=True,
-        )
-        region = region_service.resolve_region(
-            db,
-            None,
-            region_name,
-            strict=False,
-            create_if_missing=bool(region_name),
-        )
-        title = title_service.resolve_title(
-            db,
-            None,
-            expert.title,
-            strict=False,
-            create_if_missing=True,
-        )
-        if organization:
-            expert.organization_id = organization.id
-            expert.company = organization.name
-        if region:
-            expert.region_id = region.id
-            expert.region = region.name
-        if title:
-            expert.title_id = title.id
-            expert.title = title.name
-        db.add(expert)
-        db.flush()
-
-        specialty_names = _split_list(data.get("specialties"))
-        specialty_codes = _split_list(data.get("specialty_codes"))
-        specialty_ids: list[int] = []
-        missing_codes: list[str] = []
-        missing_names: list[str] = []
-        ambiguous_names: list[str] = []
-        unresolved_codes: list[str] = []
-
-        if specialty_codes:
-            for code in specialty_codes:
-                specialty = SpecialtyRepo(db).get_by_code(code)
-                if specialty is None:
-                    unresolved_codes.append(code)
-                    continue
-                specialty_ids.append(specialty.id)
-
-        name_inputs = specialty_names + unresolved_codes
-        if name_inputs:
-            stmt = select(Specialty).where(Specialty.name.in_(name_inputs))
-            rows = db.execute(stmt).scalars().all()
-            name_map: dict[str, list[Specialty]] = {}
-            for item in rows:
-                name_map.setdefault(item.name, []).append(item)
-            for name in name_inputs:
-                matches = name_map.get(name, [])
-                if not matches:
-                    if name in unresolved_codes:
-                        missing_codes.append(name)
-                    else:
-                        missing_names.append(name)
-                    continue
-                if len(matches) > 1:
-                    ambiguous_names.append(name)
-                    continue
-                specialty_ids.append(matches[0].id)
-
-        if missing_codes or missing_names:
-            missing = missing_codes + missing_names
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"专业不存在: {', '.join(missing)} (第{row_index}行)",
+            region_name = _coerce_str(data.get("region"))
+            expert = Expert(
+                name=name,
+                id_card_no=id_card_no,
+                gender=_coerce_str(data.get("gender")),
+                phone=_coerce_str(data.get("phone")),
+                company=_coerce_str(data.get("company")),
+                region=region_name,
+                title=_coerce_str(data.get("title")),
+                is_active=_coerce_bool(data.get("is_active"), True),
             )
-        if ambiguous_names:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"专业名称不唯一，请使用编码: {', '.join(ambiguous_names)} (第{row_index}行)",
+            organization = organization_service.resolve_organization(
+                db,
+                None,
+                expert.company,
+                strict=False,
+                create_if_missing=True,
             )
+            region = region_service.resolve_region(
+                db,
+                None,
+                region_name,
+                strict=False,
+                create_if_missing=bool(region_name),
+            )
+            title = title_service.resolve_title(
+                db,
+                None,
+                expert.title,
+                strict=False,
+                create_if_missing=True,
+            )
+            if organization:
+                expert.organization_id = organization.id
+                expert.company = organization.name
+            if region:
+                expert.region_id = region.id
+                expert.region = region.name
+            if title:
+                expert.title_id = title.id
+                expert.title = title.name
+            db.add(expert)
+            db.flush()
 
-        specialty_ids = list(dict.fromkeys(specialty_ids))
+            specialty_names = _split_list(data.get("specialties"))
+            specialty_codes = _split_list(data.get("specialty_codes"))
+            specialty_ids: list[int] = []
+            missing_codes: list[str] = []
+            missing_names: list[str] = []
+            ambiguous_names: list[str] = []
+            unresolved_codes: list[str] = []
 
-        _sync_expert_specialties(db, expert.id, specialty_ids)
-        appointment_letter_urls = _split_list(data.get("appointment_letter_urls"))
-        _sync_expert_documents(db, expert.id, appointment_letter_urls)
-        created += 1
+            if specialty_codes:
+                for code in specialty_codes:
+                    specialty = SpecialtyRepo(db).get_by_code(code)
+                    if specialty is None:
+                        unresolved_codes.append(code)
+                        continue
+                    specialty_ids.append(specialty.id)
 
-    db.commit()
+            name_inputs = specialty_names + unresolved_codes
+            if name_inputs:
+                stmt = select(Specialty).where(Specialty.name.in_(name_inputs))
+                rows = db.execute(stmt).scalars().all()
+                name_map: dict[str, list[Specialty]] = {}
+                for item in rows:
+                    name_map.setdefault(item.name, []).append(item)
+                for name in name_inputs:
+                    matches = name_map.get(name, [])
+                    if not matches:
+                        if name in unresolved_codes:
+                            missing_codes.append(name)
+                        else:
+                            missing_names.append(name)
+                        continue
+                    if len(matches) > 1:
+                        ambiguous_names.append(name)
+                        continue
+                    specialty_ids.append(matches[0].id)
+
+            if missing_codes or missing_names:
+                missing = missing_codes + missing_names
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"专业不存在: {', '.join(missing)} (第{row_index}行)",
+                )
+            if ambiguous_names:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"专业名称不唯一，请使用编码: {', '.join(ambiguous_names)} (第{row_index}行)",
+                )
+
+            specialty_ids = list(dict.fromkeys(specialty_ids))
+
+            _sync_expert_specialties(db, expert.id, specialty_ids)
+            appointment_letter_urls = _split_list(data.get("appointment_letter_urls"))
+            _sync_expert_documents(db, expert.id, appointment_letter_urls)
+            created += 1
+
     return {"created": created, "skipped": skipped}
 
 
