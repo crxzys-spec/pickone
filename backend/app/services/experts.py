@@ -4,7 +4,7 @@ from io import BytesIO
 
 from fastapi import HTTPException, status
 from openpyxl import Workbook, load_workbook
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.expert import Expert
@@ -12,8 +12,11 @@ from app.models.expert_document import ExpertDocument
 from app.models.expert_specialty import ExpertSpecialty
 from app.models.specialty import Specialty
 from app.repo.experts import ExpertRepo
+from app.repo.organizations import OrganizationRepo
+from app.repo.regions import RegionRepo
 from app.repo.specialties import SpecialtyRepo
-from app.schemas.pagination import PageParams
+from app.repo.utils import apply_keyword, apply_sort, paginate
+from app.schemas.expert import ExpertQuery
 from app.services import organizations as organization_service
 from app.services import titles as title_service
 from app.services import specialties as specialty_service
@@ -269,14 +272,76 @@ def _sync_expert_documents(
         )
 
 
-def list_experts(db: Session, params: PageParams) -> tuple[list[Expert], int]:
-    items, total = ExpertRepo(db).list_page(
+def list_experts(db: Session, params: ExpertQuery) -> tuple[list[Expert], int]:
+    stmt = select(Expert).distinct()
+    stmt = apply_keyword(
+        stmt,
         params.keyword,
-        params.sort_by,
-        params.sort_order,
-        params.page,
-        params.page_size,
+        [
+            Expert.name,
+            Expert.company,
+            Expert.phone,
+            Expert.id_card_no,
+            Expert.region,
+        ],
     )
+    if params.organization_id is not None:
+        organization = OrganizationRepo(db).get_by_id(params.organization_id)
+        if organization is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+        stmt = stmt.where(
+            or_(
+                Expert.organization_id == organization.id,
+                and_(
+                    Expert.organization_id.is_(None),
+                    Expert.company == organization.name,
+                ),
+            )
+        )
+    if params.region_id is not None:
+        region = RegionRepo(db).get_by_id(params.region_id)
+        if region is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Region not found",
+            )
+        stmt = stmt.where(
+            or_(
+                Expert.region_id == region.id,
+                and_(Expert.region_id.is_(None), Expert.region == region.name),
+            )
+        )
+    if params.title_id is not None:
+        title_ids = title_service.expand_to_leaf_ids(db, [params.title_id])
+        stmt = stmt.where(Expert.title_id.in_(title_ids))
+    if params.specialty_id is not None:
+        specialty_ids = specialty_service.expand_to_leaf_ids(
+            db, [params.specialty_id]
+        )
+        stmt = stmt.join(
+            ExpertSpecialty, ExpertSpecialty.expert_id == Expert.id
+        ).join(Specialty, Specialty.id == ExpertSpecialty.specialty_id)
+        stmt = stmt.where(Specialty.id.in_(specialty_ids))
+    if params.is_active is not None:
+        stmt = stmt.where(Expert.is_active.is_(params.is_active))
+    if params.gender:
+        stmt = stmt.where(Expert.gender == params.gender)
+    sort_map = {
+        "id": Expert.id,
+        "name": Expert.name,
+        "id_card_no": Expert.id_card_no,
+        "gender": Expert.gender,
+        "company": Expert.company,
+        "region": Expert.region,
+        "title": Expert.title,
+        "phone": Expert.phone,
+        "is_active": Expert.is_active,
+    }
+    stmt = apply_sort(stmt, params.sort_by, params.sort_order, sort_map, Expert.id)
+    items, total = paginate(db, stmt, params.page, params.page_size)
     _attach_expert_details(db, items)
     return items, total
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.codes import generate_code
@@ -20,17 +20,21 @@ def _generate_unique_code(repo: OrganizationRepo) -> str:
 
 
 def list_organizations(db: Session, params: PageParams) -> tuple[list[Organization], int]:
-    return OrganizationRepo(db).list_page(
+    items, total = OrganizationRepo(db).list_page(
         params.keyword,
         params.sort_by,
         params.sort_order,
         params.page,
         params.page_size,
     )
+    _attach_expert_counts(db, items)
+    return items, total
 
 
 def list_organizations_all(db: Session) -> list[Organization]:
-    return OrganizationRepo(db).list()
+    items = OrganizationRepo(db).list()
+    _attach_expert_counts(db, items)
+    return items
 
 
 def get_organization(db: Session, organization_id: int) -> Organization:
@@ -181,3 +185,34 @@ def resolve_organization(
             db.add(organization)
             db.flush()
     return organization
+
+
+def _attach_expert_counts(db: Session, items: list[Organization]) -> None:
+    if not items:
+        return
+    org_ids = [item.id for item in items]
+    org_names = [item.name for item in items if item.name]
+    id_counts = dict(
+        db.execute(
+            select(Expert.organization_id, func.count())
+            .where(Expert.organization_id.in_(org_ids))
+            .group_by(Expert.organization_id)
+        ).all()
+    )
+    name_counts: dict[str, int] = {}
+    if org_names:
+        name_counts = dict(
+            db.execute(
+                select(Expert.company, func.count())
+                .where(
+                    Expert.organization_id.is_(None),
+                    Expert.company.in_(org_names),
+                )
+                .group_by(Expert.company)
+            ).all()
+        )
+    for item in items:
+        count = int(id_counts.get(item.id, 0))
+        if item.name:
+            count += int(name_counts.get(item.name, 0))
+        setattr(item, "expert_count", count)

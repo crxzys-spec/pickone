@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.codes import generate_code
@@ -20,17 +20,21 @@ def _generate_unique_code(repo: RegionRepo) -> str:
 
 
 def list_regions(db: Session, params: PageParams) -> tuple[list[Region], int]:
-    return RegionRepo(db).list_page(
+    items, total = RegionRepo(db).list_page(
         params.keyword,
         params.sort_by,
         params.sort_order,
         params.page,
         params.page_size,
     )
+    _attach_expert_counts(db, items)
+    return items, total
 
 
 def list_regions_all(db: Session) -> list[Region]:
-    return RegionRepo(db).list()
+    items = RegionRepo(db).list()
+    _attach_expert_counts(db, items)
+    return items
 
 
 def get_region(db: Session, region_id: int) -> Region:
@@ -178,3 +182,34 @@ def resolve_region(
             db.add(region)
             db.flush()
     return region
+
+
+def _attach_expert_counts(db: Session, items: list[Region]) -> None:
+    if not items:
+        return
+    region_ids = [item.id for item in items]
+    region_names = [item.name for item in items if item.name]
+    id_counts = dict(
+        db.execute(
+            select(Expert.region_id, func.count())
+            .where(Expert.region_id.in_(region_ids))
+            .group_by(Expert.region_id)
+        ).all()
+    )
+    name_counts: dict[str, int] = {}
+    if region_names:
+        name_counts = dict(
+            db.execute(
+                select(Expert.region, func.count())
+                .where(
+                    Expert.region_id.is_(None),
+                    Expert.region.in_(region_names),
+                )
+                .group_by(Expert.region)
+            ).all()
+        )
+    for item in items:
+        count = int(id_counts.get(item.id, 0))
+        if item.name:
+            count += int(name_counts.get(item.name, 0))
+        setattr(item, "expert_count", count)

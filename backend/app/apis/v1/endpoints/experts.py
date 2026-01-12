@@ -10,9 +10,10 @@ from app.schemas.expert import (
     ExpertBatchDelete,
     ExpertCreate,
     ExpertOut,
+    ExpertQuery,
     ExpertUpdate,
 )
-from app.schemas.pagination import Page, PageParams
+from app.schemas.pagination import Page
 from app.services import experts as expert_service
 
 router = APIRouter()
@@ -24,7 +25,7 @@ router = APIRouter()
     response_model=Page[ExpertOut],
 )
 def list_experts(
-    params: PageParams = Depends(),
+    params: ExpertQuery = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

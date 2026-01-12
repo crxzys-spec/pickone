@@ -53,6 +53,12 @@
         sortable="custom"
       />
       <el-table-column
+        :label="t('organizations.columns.expertCount')"
+        prop="expert_count"
+        width="120"
+        sortable="custom"
+      />
+      <el-table-column
         :label="t('organizations.columns.sort')"
         prop="sort_order"
         width="120"

@@ -3,7 +3,7 @@
     <el-aside :width="asideWidth" class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="logo">
         <div class="gov-brand" :class="{ collapsed: isCollapsed }">
-          <div class="gov-emblem"></div>
+          <img :src="logoUrl" alt="Logo" class="logo-image" />
           <div v-if="!isCollapsed" class="logo-text">
             <div class="logo-name">{{ t("admin.logo") }}</div>
             <div class="logo-subtitle">{{ t("admin.subtitle") }}</div>
@@ -191,6 +191,7 @@ import { useRoute, useRouter } from "vue-router";
 import ProfilePanel from "../../components/ProfilePanel.vue";
 import { getMe } from "../../services/users";
 import { useUserStore } from "../../stores/user";
+import logoUrl from "../../assets/imgs/logo.png";
 
 const route = useRoute();
 const router = useRouter();
@@ -431,22 +432,11 @@ watch(() => locale.value, updateDocumentTitle, { immediate: true });
   height: 18px;
 }
 
-.sidebar :deep(.gov-emblem) {
+.logo-image {
   width: 32px;
   height: 32px;
-  border-color: rgba(255, 255, 255, 0.45);
-  background: #0e2742;
-}
-
-.sidebar :deep(.gov-emblem::before) {
-  inset: 3px;
-  background: #ffffff;
-  border-color: rgba(255, 255, 255, 0.45);
-}
-
-.sidebar :deep(.gov-emblem::after) {
-  width: 10px;
-  height: 12px;
+  object-fit: contain;
+  border-radius: 6px;
 }
 
 .header {

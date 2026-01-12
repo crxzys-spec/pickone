@@ -229,6 +229,7 @@ export interface Organization {
   code?: string | null;
   is_active: boolean;
   sort_order: number;
+  expert_count?: number;
 }
 
 export interface OrganizationCreate {
@@ -251,6 +252,7 @@ export interface Region {
   code?: string | null;
   is_active: boolean;
   sort_order: number;
+  expert_count?: number;
 }
 
 export interface RegionCreate {

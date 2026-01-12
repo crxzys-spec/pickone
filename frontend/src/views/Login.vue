@@ -3,7 +3,7 @@
     <el-card class="card gov-panel gov-animate">
       <div class="header">
         <div class="login-brand">
-          <div class="gov-emblem"></div>
+          <img :src="logoUrl" alt="Logo" class="logo-image" />
           <div class="brand-text">
             <h2 class="title">{{ t("login.title") }}</h2>
             <p class="subtitle">{{ t("login.subtitle") }}</p>
@@ -46,6 +46,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import { login } from "../services/auth";
 import { useUserStore } from "../stores/user";
+import logoUrl from "../assets/imgs/logo_blue.png";
 
 const { t, locale } = useI18n();
 const router = useRouter();
@@ -142,9 +143,12 @@ async function onSubmit() {
   word-break: break-word;
 }
 
-.login-brand :deep(.gov-emblem) {
+.logo-image {
   width: 36px;
   height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.25));
 }
 
 .submit {

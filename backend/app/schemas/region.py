@@ -23,6 +23,7 @@ class RegionOut(RegionBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    expert_count: int = 0
 
 
 class RegionBatchDelete(BaseModel):

@@ -31,6 +31,78 @@
         clearable
         class="search"
       />
+      <div class="summary">{{ t("experts.totalLabel", { total }) }}</div>
+    </div>
+    <div class="filters">
+      <el-form inline>
+        <el-form-item :label="t('experts.filter.organization')">
+          <el-select
+            v-model="filters.organization_id"
+            clearable
+            filterable
+            style="width: 160px;"
+          >
+            <el-option
+              v-for="organization in organizations"
+              :key="organization.id"
+              :label="organization.name"
+              :value="organization.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('experts.filter.region')">
+          <el-select
+            v-model="filters.region_id"
+            clearable
+            filterable
+            style="width: 160px;"
+          >
+            <el-option
+              v-for="region in regions"
+              :key="region.id"
+              :label="region.name"
+              :value="region.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('experts.filter.title')">
+          <el-tree-select
+            v-model="filters.title_id"
+            :data="titleTreeOptions"
+            :props="filterTreeProps"
+            clearable
+            filterable
+            check-strictly
+            style="width: 180px;"
+          />
+        </el-form-item>
+        <el-form-item :label="t('experts.filter.specialty')">
+          <el-tree-select
+            v-model="filters.specialty_id"
+            :data="specialtyTreeOptions"
+            :props="filterTreeProps"
+            clearable
+            filterable
+            check-strictly
+            style="width: 180px;"
+          />
+        </el-form-item>
+        <el-form-item :label="t('experts.filter.status')">
+          <el-select v-model="filters.is_active" clearable style="width: 120px;">
+            <el-option :label="t('experts.filter.all')" :value="null" />
+            <el-option :label="t('experts.filter.active')" :value="true" />
+            <el-option :label="t('experts.filter.inactive')" :value="false" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="applyFilters">
+            {{ t("experts.filter.apply") }}
+          </el-button>
+          <el-button @click="resetFilters">
+            {{ t("experts.filter.reset") }}
+          </el-button>
+        </el-form-item>
+      </el-form>
     </div>
 
     <el-table
@@ -484,6 +556,14 @@ const form = reactive<ExpertForm>({
   is_active: true,
 });
 
+const filters = reactive({
+  organization_id: null as number | null,
+  region_id: null as number | null,
+  title_id: null as number | null,
+  specialty_id: null as number | null,
+  is_active: null as boolean | null,
+});
+
 const credentialFiles = ref<UploadUserFile[]>([]);
 const previewVisible = ref(false);
 const previewUrl = ref("");
@@ -616,6 +696,11 @@ async function refresh() {
       sort_by: sortBy.value,
       sort_order: sortOrder.value,
       keyword: keyword.value.trim() || undefined,
+      organization_id: filters.organization_id ?? undefined,
+      region_id: filters.region_id ?? undefined,
+      title_id: filters.title_id ?? undefined,
+      specialty_id: filters.specialty_id ?? undefined,
+      is_active: filters.is_active ?? undefined,
     });
     experts.value = result.items;
     total.value = result.total;
@@ -624,6 +709,21 @@ async function refresh() {
   } finally {
     loading.value = false;
   }
+}
+
+function applyFilters() {
+  page.value = 1;
+  refresh();
+}
+
+function resetFilters() {
+  filters.organization_id = null;
+  filters.region_id = null;
+  filters.title_id = null;
+  filters.specialty_id = null;
+  filters.is_active = null;
+  page.value = 1;
+  refresh();
 }
 
 async function refreshCategories() {
@@ -698,6 +798,12 @@ const specialtyTreeProps = {
 };
 
 const titleTreeProps = specialtyTreeProps;
+
+const filterTreeProps = {
+  value: "id",
+  label: "label",
+  children: "children",
+};
 
 function handleOrganizationChange() {
   const organization = organizations.value.find(
@@ -1272,6 +1378,20 @@ function handlePageSizeChange(value: number) {
 
 .search {
   max-width: 260px;
+}
+
+.summary {
+  color: #5b6b7a;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.filters {
+  margin-bottom: 12px;
+}
+
+.filters :deep(.el-form--inline) {
+  row-gap: 8px;
 }
 
 .table {

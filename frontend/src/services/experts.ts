@@ -2,7 +2,16 @@ import http from "../apis/http";
 import type { ListParams, Page } from "../types/pagination";
 import type { Expert, ExpertCreate, ExpertUpdate } from "../types/domain";
 
-export async function listExperts(params: ListParams) {
+export interface ExpertListParams extends ListParams {
+  organization_id?: number;
+  region_id?: number;
+  title_id?: number;
+  specialty_id?: number;
+  is_active?: boolean;
+  gender?: string;
+}
+
+export async function listExperts(params: ExpertListParams) {
   const { data } = await http.get<Page<Expert>>("/experts", { params });
   return data;
 }

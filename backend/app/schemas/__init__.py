@@ -11,7 +11,7 @@ from app.schemas.draw import (
     DrawResultOut,
     DrawUpdate,
 )
-from app.schemas.expert import ExpertCreate, ExpertOut, ExpertUpdate
+from app.schemas.expert import ExpertCreate, ExpertOut, ExpertQuery, ExpertUpdate
 from app.schemas.organization import (
     OrganizationCreate,
     OrganizationOut,
@@ -59,6 +59,7 @@ __all__ = [
     "DrawUpdate",
     "ExpertCreate",
     "ExpertOut",
+    "ExpertQuery",
     "ExpertUpdate",
     "OrganizationCreate",
     "OrganizationOut",

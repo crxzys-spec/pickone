@@ -1,14 +1,17 @@
-import json
+﻿import json
 import os
+import random
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.codes import generate_code
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal
 from app.models.expert import Expert
+from app.models.expert_specialty import ExpertSpecialty
+from app.models.organization import Organization
 from app.models.permission import Permission
 from app.models.region import Region
 from app.models.role import Role
@@ -402,18 +405,386 @@ def seed_regions_from_json(db: Session) -> None:
     db.flush()
 
 
+
 def seed_experts(db: Session) -> None:
     root = Path(__file__).resolve().parents[3]
-    source = root / "docs" / "专家导入表.xlsx"
+    source = root / "docs" / "\u4e13\u5bb6\u5bfc\u5165\u8868.xlsx"
     if not source.exists():
-        return
+        source = None
 
     class _SeedFile:
         def __init__(self, file_obj):
             self.file = file_obj
 
-    with source.open("rb") as file_obj:
-        expert_service.import_experts(db, _SeedFile(file_obj))
+    if source is not None:
+        with source.open("rb") as file_obj:
+            expert_service.import_experts(db, _SeedFile(file_obj))
+    _seed_random_experts(db)
+
+
+def _seed_random_experts(db: Session) -> None:
+    target_total = _get_seed_expert_target()
+    if target_total <= 0:
+        return
+
+    current_total = db.execute(select(func.count()).select_from(Expert)).scalar_one()
+    missing = target_total - current_total
+    if missing <= 0:
+        return
+
+    regions = db.execute(select(Region)).scalars().all()
+    specialties = db.execute(select(Specialty)).scalars().all()
+    if not specialties:
+        return
+
+    organizations = _ensure_seed_organizations(db, 40)
+    leaf_specialties = _filter_leaf_items(specialties)
+    if not leaf_specialties:
+        return
+    specialty_ids_all = [item.id for item in leaf_specialties]
+
+    procurement_ids = _select_procurement_specialties(leaf_specialties)
+    procurement_set = set(procurement_ids)
+    specialty_ids_other = [item for item in specialty_ids_all if item not in procurement_set]
+
+    titles = db.execute(select(Title)).scalars().all()
+    leaf_titles = _filter_leaf_items(titles)
+
+    kunming_regions, other_regions = _split_kunming_regions(regions)
+    used_id_cards = set(db.execute(select(Expert.id_card_no)).scalars().all())
+    used_phones = set(db.execute(select(Expert.phone)).scalars().all())
+    used_names = set(db.execute(select(Expert.name)).scalars().all())
+    rng = random.Random()
+
+    start_index = current_total + 1
+    for offset in range(missing):
+        region = _pick_region(rng, kunming_regions, other_regions)
+        organization = rng.choice(organizations) if organizations else None
+        title = _pick_title(rng, leaf_titles)
+
+        expert = Expert(
+            name=_random_chinese_name(rng, used_names),
+            id_card_no=_random_id_card(rng, used_id_cards),
+            gender=_random_gender(rng),
+            phone=_random_phone(rng, used_phones),
+            company=organization.name if organization else None,
+            organization_id=organization.id if organization else None,
+            region_id=region.id if region else None,
+            region=region.name if region else None,
+            title_id=title.id if title else None,
+            title=title.name if title else None,
+            is_active=_random_active(rng),
+        )
+        db.add(expert)
+        db.flush()
+
+        specialty_ids = _pick_specialty_ids(rng, specialty_ids_all, procurement_ids, specialty_ids_other)
+        for specialty_id in specialty_ids:
+            db.add(ExpertSpecialty(expert_id=expert.id, specialty_id=specialty_id))
+
+
+def _get_seed_expert_target() -> int:
+    raw = os.getenv("SEED_EXPERT_COUNT")
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            return 0
+    return 3200
+
+
+def _ensure_seed_organizations(db: Session, count: int) -> list[Organization]:
+    existing = db.execute(select(Organization)).scalars().all()
+    if existing:
+        return list(existing)
+    for index in range(1, count + 1):
+        name = f"Org-{index:03d}"
+        code = f"ORG{index:03d}"
+        db.add(Organization(name=name, code=code, is_active=True, sort_order=index))
+    db.flush()
+    return db.execute(select(Organization)).scalars().all()
+
+
+def _filter_leaf_items(items: list) -> list:
+    child_ids = {item.parent_id for item in items if getattr(item, "parent_id", None)}
+    return [item for item in items if item.id not in child_ids]
+
+
+def _select_procurement_specialties(items: list[Specialty]) -> list[int]:
+    keyword = "\u91c7\u8d2d"
+    result: list[int] = []
+    for item in items:
+        code = (item.code or "").upper()
+        name = item.name or ""
+        if code.startswith("PK") or keyword in name:
+            result.append(item.id)
+    return result
+
+
+def _split_kunming_regions(regions: list[Region]) -> tuple[list[Region], list[Region]]:
+    kunming_codes = {"530199"}
+    kunming = [region for region in regions if region.code in kunming_codes]
+    if not kunming:
+        keyword = "\u6606\u660e"
+        kunming = [region for region in regions if region.name and keyword in region.name]
+    other = [region for region in regions if region not in kunming]
+    return kunming, other
+
+
+def _pick_region(rng: random.Random, kunming_regions: list[Region], other_regions: list[Region]) -> Region | None:
+    if kunming_regions and rng.random() < 0.5:
+        return rng.choice(kunming_regions)
+    if other_regions:
+        return rng.choice(other_regions)
+    if kunming_regions:
+        return rng.choice(kunming_regions)
+    return None
+
+
+def _pick_title(rng: random.Random, titles: list[Title]) -> Title | None:
+    if not titles:
+        return None
+    if rng.random() < 0.3:
+        return None
+    return rng.choice(titles)
+
+
+def _pick_specialty_ids(rng: random.Random, all_ids: list[int], procurement_ids: list[int], other_ids: list[int]) -> list[int]:
+    if not all_ids:
+        return []
+    count = rng.randint(1, 5)
+    count = min(count, len(all_ids))
+    chosen: set[int] = set()
+    attempts = max(count * 3, 5)
+    for _ in range(attempts):
+        use_procurement = procurement_ids and rng.random() < 0.6
+        if use_procurement:
+            pool = procurement_ids
+        else:
+            pool = other_ids if other_ids else all_ids
+        chosen.add(rng.choice(pool))
+        if len(chosen) >= count:
+            break
+    if len(chosen) < count:
+        remaining = [item for item in all_ids if item not in chosen]
+        if remaining:
+            chosen.update(rng.sample(remaining, min(count - len(chosen), len(remaining))))
+    return list(chosen)
+
+
+def _random_id_card(rng: random.Random, used: set[str]) -> str:
+    while True:
+        value = str(rng.randint(10**17, 10**18 - 1))
+        if value not in used:
+            used.add(value)
+            return value
+
+
+def _random_phone(rng: random.Random, used: set[str | None]) -> str:
+    prefixes = ["13", "14", "15", "17", "18", "19"]
+    while True:
+        value = rng.choice(prefixes) + "".join(rng.choice("0123456789") for _ in range(9))
+        if value not in used:
+            used.add(value)
+            return value
+
+
+def _random_gender(rng: random.Random) -> str:
+    return "male" if rng.random() < 0.5 else "female"
+
+
+def _random_active(rng: random.Random) -> bool:
+    return rng.random() < 0.9
+
+
+CHINESE_SURNAMES = [
+    "赵",
+    "钱",
+    "孙",
+    "李",
+    "周",
+    "吴",
+    "郑",
+    "王",
+    "冯",
+    "陈",
+    "褚",
+    "卫",
+    "蒋",
+    "沈",
+    "韩",
+    "杨",
+    "朱",
+    "秦",
+    "尤",
+    "许",
+    "何",
+    "吕",
+    "施",
+    "张",
+    "孔",
+    "曹",
+    "严",
+    "华",
+    "金",
+    "魏",
+    "陶",
+    "姜",
+    "戚",
+    "谢",
+    "邹",
+    "喻",
+    "柏",
+    "水",
+    "窦",
+    "章",
+    "云",
+    "苏",
+    "潘",
+    "葛",
+    "奚",
+    "范",
+    "彭",
+    "郎",
+    "鲁",
+    "韦",
+    "昌",
+    "马",
+    "苗",
+    "凤",
+    "花",
+    "方",
+    "俞",
+    "任",
+    "袁",
+    "柳",
+    "鲍",
+    "史",
+    "唐",
+    "费",
+    "廉",
+    "岑",
+    "薛",
+    "雷",
+    "贺",
+    "倪",
+    "汤",
+    "滕",
+    "殷",
+    "罗",
+    "毕",
+    "郝",
+    "安",
+    "常",
+    "乐",
+    "于",
+    "时",
+    "傅",
+    "皮",
+    "卞",
+    "齐",
+    "康",
+    "伍",
+    "余",
+    "元",
+    "卜",
+    "顾",
+    "孟",
+    "平",
+    "黄",
+    "穆",
+    "萧",
+    "尹",
+    "姚",
+    "邵",
+    "湛",
+    "汪",
+    "祁",
+    "毛",
+    "禹",
+    "狄",
+    "米",
+    "贝",
+    "明",
+    "臧",
+    "欧阳",
+    "司马",
+    "诸葛",
+    "上官",
+    "东方",
+]
+
+CHINESE_GIVEN = [
+    "伟",
+    "芳",
+    "娜",
+    "敏",
+    "静",
+    "丽",
+    "强",
+    "磊",
+    "军",
+    "洋",
+    "勇",
+    "艳",
+    "杰",
+    "涛",
+    "婷",
+    "超",
+    "明",
+    "玲",
+    "鹏",
+    "华",
+    "燕",
+    "鑫",
+    "辉",
+    "刚",
+    "平",
+    "瑞",
+    "坤",
+    "雪",
+    "丹",
+    "彬",
+    "凯",
+    "萍",
+    "欣",
+    "宇",
+    "浩",
+    "晨",
+    "凯",
+    "宇",
+    "佳",
+    "乐",
+    "林",
+    "豪",
+    "婷",
+    "怡",
+    "倩",
+    "蕾",
+    "楠",
+    "杰",
+    "斌",
+    "翔",
+    "源",
+    "鑫",
+]
+
+
+def _random_chinese_name(rng: random.Random, used: set[str] | None = None) -> str:
+    for _ in range(12):
+        surname = rng.choice(CHINESE_SURNAMES)
+        given = rng.choice(CHINESE_GIVEN)
+        if rng.random() < 0.45:
+            given += rng.choice(CHINESE_GIVEN)
+        name = f"{surname}{given}"
+        if used is None or name not in used:
+            if used is not None:
+                used.add(name)
+            return name
+    fallback = f"{rng.choice(CHINESE_SURNAMES)}{rng.choice(CHINESE_GIVEN)}"
+    if used is not None:
+        used.add(fallback)
+    return fallback
 
 
 def main() -> None:

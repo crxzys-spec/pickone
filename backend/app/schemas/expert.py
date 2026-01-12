@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.schemas.specialty import SpecialtyOut
+from app.schemas.pagination import PageParams
 
 
 class ExpertBase(BaseModel):
@@ -84,3 +85,12 @@ class ExpertOut(ExpertBase):
 
 class ExpertBatchDelete(BaseModel):
     ids: list[int] = Field(default_factory=list, min_length=1)
+
+
+class ExpertQuery(PageParams):
+    organization_id: int | None = None
+    region_id: int | None = None
+    title_id: int | None = None
+    specialty_id: int | None = None
+    is_active: bool | None = None
+    gender: str | None = None
