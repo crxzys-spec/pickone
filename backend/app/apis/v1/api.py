@@ -5,6 +5,7 @@ from app.apis.v1.endpoints import (
     categories,
     draws,
     experts,
+    public,
     organizations,
     permissions,
     regions,
@@ -30,3 +31,4 @@ api_router.include_router(rules.router, prefix="/rules", tags=["rules"])
 api_router.include_router(draws.router, prefix="/draws", tags=["draws"])
 api_router.include_router(titles.router, prefix="/titles", tags=["titles"])
 api_router.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
+api_router.include_router(public.router, prefix="/public", tags=["public"])

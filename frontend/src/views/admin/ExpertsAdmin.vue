@@ -94,6 +94,14 @@
             <el-option :label="t('experts.filter.inactive')" :value="false" />
           </el-select>
         </el-form-item>
+        <el-form-item :label="t('experts.filter.auditStatus')">
+          <el-select v-model="filters.audit_status" clearable style="width: 140px;">
+            <el-option :label="t('experts.audit.all')" :value="null" />
+            <el-option :label="t('experts.audit.pending')" value="pending" />
+            <el-option :label="t('experts.audit.approved')" value="approved" />
+            <el-option :label="t('experts.audit.rejected')" value="rejected" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="applyFilters">
             {{ t("experts.filter.apply") }}
@@ -196,6 +204,17 @@
           <span v-else class="muted">-</span>
         </template>
       </el-table-column>
+      <el-table-column
+        :label="t('experts.columns.auditStatus')"
+        width="120"
+        prop="audit_status"
+      >
+        <template #default="{ row }">
+          <el-tag :type="auditStatusTag(row.audit_status)">
+            {{ auditStatusLabel(row.audit_status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column :label="t('experts.columns.active')" width="100" prop="is_active" sortable="custom">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
@@ -203,8 +222,24 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('experts.columns.actions')" width="220" fixed="right">
+      <el-table-column :label="t('experts.columns.actions')" width="300" fixed="right">
         <template #default="{ row }">
+          <el-button
+            v-if="row.audit_status !== 'approved'"
+            link
+            type="success"
+            @click="approveExpert(row)"
+          >
+            {{ t("experts.actions.approve") }}
+          </el-button>
+          <el-button
+            v-if="row.audit_status !== 'rejected'"
+            link
+            type="warning"
+            @click="rejectExpert(row)"
+          >
+            {{ t("experts.actions.reject") }}
+          </el-button>
           <el-button link type="primary" @click="openEdit(row)">
             {{ t("common.edit") }}
           </el-button>
@@ -242,7 +277,7 @@
           <el-option :label="t('experts.gender.female')" value="女" />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('experts.form.phone')">
+      <el-form-item :label="t('experts.form.phone')" required>
         <el-input v-model="form.phone" />
       </el-form-item>
       <el-form-item :label="t('experts.form.company')">
@@ -320,6 +355,19 @@
             </div>
           </template>
         </el-upload>
+      </el-form-item>
+      <el-form-item :label="t('experts.form.auditStatus')">
+        <el-radio-group v-model="form.audit_status" class="audit-group">
+          <el-radio-button label="pending">
+            {{ t("experts.audit.pending") }}
+          </el-radio-button>
+          <el-radio-button label="approved">
+            {{ t("experts.audit.approved") }}
+          </el-radio-button>
+          <el-radio-button label="rejected">
+            {{ t("experts.audit.rejected") }}
+          </el-radio-button>
+        </el-radio-group>
       </el-form-item>
       <el-form-item :label="t('experts.form.active')">
         <el-switch v-model="form.is_active" />
@@ -498,6 +546,7 @@ import type {
   Region,
   Title,
 } from "../../types/domain";
+import { resolveErrorMessage } from "../../utils/errors";
 import { maskIdCard, maskName, maskPhone } from "../../utils/mask";
 
 interface ExpertForm {
@@ -513,6 +562,7 @@ interface ExpertForm {
   title_id: number | null;
   specialty_ids: number[];
   appointment_letter_urls: string[];
+  audit_status: string;
   is_active: boolean;
 }
 
@@ -553,6 +603,7 @@ const form = reactive<ExpertForm>({
   title_id: null,
   specialty_ids: [],
   appointment_letter_urls: [],
+  audit_status: "approved",
   is_active: true,
 });
 
@@ -562,6 +613,7 @@ const filters = reactive({
   title_id: null as number | null,
   specialty_id: null as number | null,
   is_active: null as boolean | null,
+  audit_status: null as string | null,
 });
 
 const credentialFiles = ref<UploadUserFile[]>([]);
@@ -645,6 +697,7 @@ function resetForm() {
   form.title_id = null;
   form.specialty_ids = [];
   form.appointment_letter_urls = [];
+  form.audit_status = "approved";
   form.is_active = true;
   credentialFiles.value = [];
   originalSensitive.value = { name: "", id_card_no: "", phone: "" };
@@ -687,6 +740,26 @@ function specialtiesLabel(expert: Expert) {
   return expert.specialties.map((item) => item.name).join("、");
 }
 
+function auditStatusLabel(value?: string | null) {
+  if (value === "approved") {
+    return t("experts.audit.approved");
+  }
+  if (value === "rejected") {
+    return t("experts.audit.rejected");
+  }
+  return t("experts.audit.pending");
+}
+
+function auditStatusTag(value?: string | null) {
+  if (value === "approved") {
+    return "success";
+  }
+  if (value === "rejected") {
+    return "danger";
+  }
+  return "warning";
+}
+
 async function refresh() {
   loading.value = true;
   try {
@@ -698,10 +771,11 @@ async function refresh() {
       keyword: keyword.value.trim() || undefined,
       organization_id: filters.organization_id ?? undefined,
       region_id: filters.region_id ?? undefined,
-      title_id: filters.title_id ?? undefined,
-      specialty_id: filters.specialty_id ?? undefined,
-      is_active: filters.is_active ?? undefined,
-    });
+        title_id: filters.title_id ?? undefined,
+        specialty_id: filters.specialty_id ?? undefined,
+        is_active: filters.is_active ?? undefined,
+        audit_status: filters.audit_status ?? undefined,
+      });
     experts.value = result.items;
     total.value = result.total;
     tableRef.value?.clearSelection();
@@ -722,6 +796,7 @@ function resetFilters() {
   filters.title_id = null;
   filters.specialty_id = null;
   filters.is_active = null;
+  filters.audit_status = null;
   page.value = 1;
   refresh();
 }
@@ -1089,6 +1164,7 @@ function openEdit(expert: Expert) {
     [];
   form.appointment_letter_urls = expert.appointment_letter_urls ?? [];
   syncCredentialFiles(form.appointment_letter_urls);
+  form.audit_status = expert.audit_status ?? "pending";
   form.is_active = expert.is_active;
   originalSensitive.value = {
     name: expert.name ?? "",
@@ -1101,6 +1177,7 @@ function openEdit(expert: Expert) {
 async function submitForm() {
   const trimmedIdCard = form.id_card_no.trim();
   const trimmedName = form.name.trim();
+  const trimmedPhone = form.phone.trim();
   const idCardUnchanged = isUnchangedMasked(
     trimmedIdCard,
     originalSensitive.value.id_card_no,
@@ -1108,6 +1185,10 @@ async function submitForm() {
   const nameUnchanged = isUnchangedMasked(
     trimmedName,
     originalSensitive.value.name,
+  );
+  const phoneUnchanged = isUnchangedMasked(
+    trimmedPhone,
+    originalSensitive.value.phone,
   );
   if (!isEditing.value) {
     if (!trimmedIdCard) {
@@ -1118,6 +1199,10 @@ async function submitForm() {
       ElMessage.error(t("experts.messages.nameRequired"));
       return;
     }
+    if (!trimmedPhone) {
+      ElMessage.error(t("experts.messages.phoneRequired"));
+      return;
+    }
   } else {
     if (!idCardUnchanged && !trimmedIdCard) {
       ElMessage.error(t("experts.messages.idCardRequired"));
@@ -1125,6 +1210,10 @@ async function submitForm() {
     }
     if (!nameUnchanged && !trimmedName) {
       ElMessage.error(t("experts.messages.nameRequired"));
+      return;
+    }
+    if (!phoneUnchanged && !trimmedPhone) {
+      ElMessage.error(t("experts.messages.phoneRequired"));
       return;
     }
   }
@@ -1140,6 +1229,7 @@ async function submitForm() {
         title_id: form.title_id,
         specialty_ids: form.specialty_ids,
         appointment_letter_urls: form.appointment_letter_urls,
+        audit_status: form.audit_status,
         is_active: form.is_active,
       };
       if (!nameUnchanged) {
@@ -1148,10 +1238,6 @@ async function submitForm() {
       if (!idCardUnchanged) {
         payload.id_card_no = form.id_card_no || null;
       }
-      const phoneUnchanged = isUnchangedMasked(
-        form.phone.trim(),
-        originalSensitive.value.phone,
-      );
       if (!phoneUnchanged) {
         payload.phone = form.phone || null;
       }
@@ -1171,6 +1257,7 @@ async function submitForm() {
         title_id: form.title_id,
         specialty_ids: form.specialty_ids,
         appointment_letter_urls: form.appointment_letter_urls,
+        audit_status: form.audit_status,
         is_active: form.is_active,
       });
       ElMessage.success(t("experts.messages.created"));
@@ -1178,7 +1265,24 @@ async function submitForm() {
     dialogVisible.value = false;
     await refresh();
   } catch (error) {
-    ElMessage.error(t("experts.messages.opFailed"));
+    ElMessage.error(
+      resolveErrorMessage(error, t("experts.messages.opFailed"), translateExpertDetail),
+    );
+  }
+}
+
+function translateExpertDetail(detail: string) {
+  switch (detail) {
+    case "ID card already exists":
+      return t("experts.messages.idCardExists");
+    case "Phone already exists":
+      return t("experts.messages.phoneExists");
+    case "ID card is required":
+      return t("experts.messages.idCardRequired");
+    case "Phone is required":
+      return t("experts.messages.phoneRequired");
+    default:
+      return null;
   }
 }
 
@@ -1195,6 +1299,44 @@ async function confirmDelete(expert: Expert) {
   await deleteExpert(expert.id);
   ElMessage.success(t("experts.messages.deleted"));
   await refresh();
+}
+
+async function updateAuditStatus(expert: Expert, status: string) {
+  const actionLabel =
+    status === "approved"
+      ? t("experts.actions.approve")
+      : t("experts.actions.reject");
+  try {
+    await ElMessageBox.confirm(
+      t("experts.messages.auditConfirm", {
+        name: maskName(expert.name),
+        action: actionLabel,
+      }),
+      t("common.confirm"),
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await updateExpert(expert.id, { audit_status: status });
+    ElMessage.success(
+      status === "approved"
+        ? t("experts.messages.auditApproved")
+        : t("experts.messages.auditRejected"),
+    );
+    await refresh();
+  } catch (error) {
+    ElMessage.error(t("experts.messages.auditFailed"));
+  }
+}
+
+function approveExpert(expert: Expert) {
+  updateAuditStatus(expert, "approved");
+}
+
+function rejectExpert(expert: Expert) {
+  updateAuditStatus(expert, "rejected");
 }
 
 function handleSelectionChange(rows: Expert[]) {
@@ -1410,6 +1552,12 @@ function handlePageSizeChange(value: number) {
 
 .credential-uploader :deep(.el-upload--picture-card) {
   border-radius: 6px;
+}
+
+.audit-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .upload-tip {

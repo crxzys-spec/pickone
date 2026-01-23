@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 const LoginView = () => import("../views/Login.vue");
+const ExpertRegisterView = () => import("../views/ExpertRegister.vue");
 const AdminLayout = () => import("../views/admin/AdminLayout.vue");
 const DrawsAdmin = () => import("../views/admin/DrawsAdmin.vue");
 const ExpertsAdmin = () => import("../views/admin/ExpertsAdmin.vue");
@@ -22,6 +23,11 @@ const routes = [
     path: "/login",
     name: "login",
     component: LoginView,
+  },
+  {
+    path: "/expert/register",
+    name: "expert-register",
+    component: ExpertRegisterView,
   },
   {
     path: "/me",

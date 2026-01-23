@@ -9,6 +9,7 @@ from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from app.apis.v1.api import api_router
 from app.core.config import settings
+from app.core.uploads import extract_relative_path, verify_upload_token
 
 app = FastAPI(title="PickOne API")
 
@@ -22,6 +23,28 @@ UPLOAD_URL_PREFIX = settings.upload_url_prefix or "/uploads"
 if not UPLOAD_URL_PREFIX.startswith("/"):
     UPLOAD_URL_PREFIX = f"/{UPLOAD_URL_PREFIX}"
 UPLOAD_URL_PREFIX = UPLOAD_URL_PREFIX.rstrip("/")
+EXPERT_UPLOAD_PREFIX = f"{UPLOAD_URL_PREFIX}/experts/"
+
+
+def _ensure_safe_defaults() -> None:
+    if settings.environment.lower() != "production":
+        return
+    if settings.secret_key == "change-me" or len(settings.secret_key) < 32:
+        raise RuntimeError("SECRET_KEY must be set to a strong value in production.")
+
+
+_ensure_safe_defaults()
+
+
+@app.middleware("http")
+async def protect_expert_uploads(request: Request, call_next):
+    request_path = request.url.path
+    if request_path.startswith(EXPERT_UPLOAD_PREFIX):
+        relative_path = extract_relative_path(request_path)
+        token = request.query_params.get("token", "")
+        if not relative_path or not verify_upload_token(token, relative_path):
+            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+    return await call_next(request)
 
 
 @app.exception_handler(Exception)

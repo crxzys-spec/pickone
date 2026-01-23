@@ -7,6 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.codes import generate_code
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal
 from app.models.expert import Expert
@@ -158,6 +159,8 @@ def seed_roles(db: Session, permissions: dict[str, Permission]) -> dict[str, Rol
 def seed_admin_user(db: Session, roles: dict[str, Role]) -> User:
     username = os.getenv("SEED_ADMIN_USERNAME", "admin")
     password = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+    if settings.environment.lower() == "production" and password == "admin123":
+        raise RuntimeError("SEED_ADMIN_PASSWORD must be set in production.")
 
     user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
     if user is None:

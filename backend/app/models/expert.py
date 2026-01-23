@@ -14,11 +14,14 @@ class Expert(Base, TimestampMixin):
         String(32), unique=True, index=True, nullable=False
     )
     gender: Mapped[str | None] = mapped_column(String(10))
-    phone: Mapped[str | None] = mapped_column(String(30))
+    phone: Mapped[str | None] = mapped_column(String(30), unique=True, index=True)
     company: Mapped[str | None] = mapped_column(String(255))
     organization_id: Mapped[int | None] = mapped_column(Integer, index=True)
     region_id: Mapped[int | None] = mapped_column(Integer, index=True)
     region: Mapped[str | None] = mapped_column(String(80), index=True)
     title: Mapped[str | None] = mapped_column(String(100))
     title_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    audit_status: Mapped[str] = mapped_column(
+        String(20), default="pending", nullable=False, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

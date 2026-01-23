@@ -1,3 +1,5 @@
+export type ExpertAuditStatus = "pending" | "approved" | "rejected";
+
 export interface Expert {
   id: number;
   name: string;
@@ -13,6 +15,7 @@ export interface Expert {
   specialties?: Specialty[];
   specialty_ids?: number[];
   appointment_letter_urls?: string[];
+  audit_status: ExpertAuditStatus;
   is_active: boolean;
 }
 
@@ -20,7 +23,7 @@ export interface ExpertCreate {
   name: string;
   id_card_no: string;
   gender?: string | null;
-  phone?: string | null;
+  phone: string;
   company?: string | null;
   organization_id?: number | null;
   region_id?: number | null;
@@ -29,6 +32,7 @@ export interface ExpertCreate {
   title_id?: number | null;
   specialty_ids?: number[];
   appointment_letter_urls?: string[];
+  audit_status?: ExpertAuditStatus;
   is_active: boolean;
 }
 
@@ -45,7 +49,23 @@ export interface ExpertUpdate {
   title_id?: number | null;
   specialty_ids?: number[] | null;
   appointment_letter_urls?: string[] | null;
+  audit_status?: ExpertAuditStatus | null;
   is_active?: boolean | null;
+}
+
+export interface ExpertPublicCreate {
+  name: string;
+  id_card_no: string;
+  gender?: string | null;
+  phone: string;
+  company?: string | null;
+  organization_id?: number | null;
+  region_id?: number | null;
+  region?: string | null;
+  title?: string | null;
+  title_id?: number | null;
+  specialty_ids?: number[];
+  appointment_letter_urls?: string[];
 }
 
 export interface Rule {

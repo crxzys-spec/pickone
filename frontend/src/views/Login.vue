@@ -34,6 +34,12 @@
           </el-button>
         </el-form-item>
       </el-form>
+      <div class="login-extra">
+        <span class="hint">{{ t("login.expertHint") }}</span>
+        <el-link type="primary" :underline="false" @click="goRegister">
+          {{ t("login.expertEntry") }}
+        </el-link>
+      </div>
     </el-card>
   </div>
 </template>
@@ -83,6 +89,10 @@ async function onSubmit() {
   } finally {
     loading.value = false;
   }
+}
+
+function goRegister() {
+  router.push("/expert/register");
 }
 </script>
 
@@ -154,5 +164,15 @@ async function onSubmit() {
 .submit {
   width: 140px;
   height: 36px;
+}
+
+.login-extra {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--gov-muted);
+  font-size: 13px;
 }
 </style>

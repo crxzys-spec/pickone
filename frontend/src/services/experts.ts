@@ -1,6 +1,11 @@
 import http from "../apis/http";
 import type { ListParams, Page } from "../types/pagination";
-import type { Expert, ExpertCreate, ExpertUpdate } from "../types/domain";
+import type {
+  Expert,
+  ExpertAuditStatus,
+  ExpertCreate,
+  ExpertUpdate,
+} from "../types/domain";
 
 export interface ExpertListParams extends ListParams {
   organization_id?: number;
@@ -9,6 +14,7 @@ export interface ExpertListParams extends ListParams {
   specialty_id?: number;
   is_active?: boolean;
   gender?: string;
+  audit_status?: ExpertAuditStatus;
 }
 
 export async function listExperts(params: ExpertListParams) {

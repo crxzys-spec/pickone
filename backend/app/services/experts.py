@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from io import BytesIO
 
 from fastapi import HTTPException, status
@@ -17,13 +18,22 @@ from app.repo.regions import RegionRepo
 from app.repo.specialties import SpecialtyRepo
 from app.repo.utils import apply_keyword, apply_sort, paginate
 from app.schemas.expert import ExpertQuery
+from app.core.uploads import build_signed_upload_url, extract_relative_path
 from app.services import organizations as organization_service
 from app.services import titles as title_service
 from app.services import specialties as specialty_service
 from app.services import regions as region_service
-from app.schemas.expert import ExpertCreate, ExpertUpdate
+from app.schemas.expert import ExpertCreate, ExpertPublicCreate, ExpertUpdate
 
 APPOINTMENT_DOC_TYPE = "appointment_letter"
+AUDIT_STATUS_PENDING = "pending"
+AUDIT_STATUS_APPROVED = "approved"
+AUDIT_STATUS_REJECTED = "rejected"
+ALLOWED_AUDIT_STATUSES = {
+    AUDIT_STATUS_PENDING,
+    AUDIT_STATUS_APPROVED,
+    AUDIT_STATUS_REJECTED,
+}
 
 EXPORT_FIELDS = [
     ("name", "姓名"),
@@ -35,6 +45,7 @@ EXPORT_FIELDS = [
     ("title", "职称"),
     ("specialty_codes", "专业编码"),
     ("appointment_letter_urls", "聘书图片"),
+    ("audit_status", "审核状态"),
     ("is_active", "启用"),
 ]
 EXPORT_HEADERS = [label for _, label in EXPORT_FIELDS]
@@ -60,6 +71,9 @@ LEGACY_HEADER_MAP = {
     "appointment letters": "appointment_letter_urls",
     "isactive": "is_active",
     "is active": "is_active",
+    "audit_status": "audit_status",
+    "audit status": "audit_status",
+    "审核状态": "audit_status",
 }
 HEADER_MAP.update(LEGACY_HEADER_MAP)
 HEADER_MAP.update({field: field for field, _ in EXPORT_FIELDS})
@@ -92,6 +106,48 @@ def _coerce_bool(value: object | None, default: bool) -> bool:
             return True
         if normalized in {"0", "false", "no", "n"}:
             return False
+    return default
+
+
+def _normalize_audit_status(value: object | None, default: str) -> str:
+    if value is None:
+        return default
+    if isinstance(value, Enum):
+        value = value.value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        mapping = {
+            "approved": AUDIT_STATUS_APPROVED,
+            "approve": AUDIT_STATUS_APPROVED,
+            "pass": AUDIT_STATUS_APPROVED,
+            "passed": AUDIT_STATUS_APPROVED,
+            "yes": AUDIT_STATUS_APPROVED,
+            "true": AUDIT_STATUS_APPROVED,
+            "1": AUDIT_STATUS_APPROVED,
+            "pending": AUDIT_STATUS_PENDING,
+            "review": AUDIT_STATUS_PENDING,
+            "waiting": AUDIT_STATUS_PENDING,
+            "rejected": AUDIT_STATUS_REJECTED,
+            "reject": AUDIT_STATUS_REJECTED,
+            "failed": AUDIT_STATUS_REJECTED,
+            "no": AUDIT_STATUS_REJECTED,
+            "false": AUDIT_STATUS_REJECTED,
+            "0": AUDIT_STATUS_REJECTED,
+            "通过": AUDIT_STATUS_APPROVED,
+            "已通过": AUDIT_STATUS_APPROVED,
+            "审核通过": AUDIT_STATUS_APPROVED,
+            "待审": AUDIT_STATUS_PENDING,
+            "待审核": AUDIT_STATUS_PENDING,
+            "审核中": AUDIT_STATUS_PENDING,
+            "驳回": AUDIT_STATUS_REJECTED,
+            "拒绝": AUDIT_STATUS_REJECTED,
+            "未通过": AUDIT_STATUS_REJECTED,
+        }
+        return mapping.get(normalized, default)
+    if isinstance(value, bool):
+        return AUDIT_STATUS_APPROVED if value else AUDIT_STATUS_REJECTED
+    if isinstance(value, int):
+        return AUDIT_STATUS_APPROVED if value else AUDIT_STATUS_REJECTED
     return default
 
 
@@ -158,6 +214,21 @@ def _ensure_id_card_unique(
         )
 
 
+def _ensure_phone_unique(
+    db: Session, phone: str | None, exclude_id: int | None = None
+) -> None:
+    if not phone:
+        return
+    stmt = select(Expert.id).where(Expert.phone == phone)
+    if exclude_id is not None:
+        stmt = stmt.where(Expert.id != exclude_id)
+    exists = db.execute(stmt).first() is not None
+    if exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phone already exists",
+        )
+
 def _attach_expert_details(db: Session, experts: list[Expert]) -> None:
     if not experts:
         return
@@ -185,7 +256,10 @@ def _attach_expert_details(db: Session, experts: list[Expert]) -> None:
         .order_by(ExpertDocument.sort_order, ExpertDocument.id)
     )
     for doc in db.execute(doc_stmt).scalars().all():
-        doc_map.setdefault(doc.expert_id, []).append(doc.url)
+        url = doc.url
+        relative = extract_relative_path(url)
+        signed = build_signed_upload_url(relative) if relative else url
+        doc_map.setdefault(doc.expert_id, []).append(signed)
 
     for expert in experts:
         specialties = specialty_map.get(expert.id, [])
@@ -254,7 +328,15 @@ def _sync_expert_documents(
 ) -> None:
     if urls is None:
         return
-    clean_urls = [item.strip() for item in urls if isinstance(item, str) and item.strip()]
+    clean_urls: list[str] = []
+    for item in urls:
+        if not isinstance(item, str):
+            continue
+        raw = item.strip()
+        if not raw:
+            continue
+        relative = extract_relative_path(raw)
+        clean_urls.append(relative or raw)
     db.execute(
         delete(ExpertDocument).where(
             ExpertDocument.expert_id == expert_id,
@@ -329,6 +411,13 @@ def list_experts(db: Session, params: ExpertQuery) -> tuple[list[Expert], int]:
         stmt = stmt.where(Expert.is_active.is_(params.is_active))
     if params.gender:
         stmt = stmt.where(Expert.gender == params.gender)
+    if params.audit_status is not None:
+        audit_value = (
+            params.audit_status.value
+            if hasattr(params.audit_status, "value")
+            else str(params.audit_status)
+        )
+        stmt = stmt.where(Expert.audit_status == audit_value)
     sort_map = {
         "id": Expert.id,
         "name": Expert.name,
@@ -338,6 +427,7 @@ def list_experts(db: Session, params: ExpertQuery) -> tuple[list[Expert], int]:
         "region": Expert.region,
         "title": Expert.title,
         "phone": Expert.phone,
+        "audit_status": Expert.audit_status,
         "is_active": Expert.is_active,
     }
     stmt = apply_sort(stmt, params.sort_by, params.sort_order, sort_map, Expert.id)
@@ -364,13 +454,31 @@ def create_expert(db: Session, payload: ExpertCreate) -> Expert:
     data = payload.model_dump()
     specialty_ids = data.pop("specialty_ids", [])
     appointment_letter_urls = data.pop("appointment_letter_urls", [])
+    audit_status = _normalize_audit_status(
+        data.get("audit_status"), AUDIT_STATUS_PENDING
+    )
+    if audit_status not in ALLOWED_AUDIT_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid audit status",
+        )
+    data["audit_status"] = audit_status
 
     if not data.get("id_card_no"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="ID card is required",
         )
+    phone_value = data.get("phone")
+    phone_value = str(phone_value).strip() if phone_value is not None else ""
+    if not phone_value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phone is required",
+        )
+    data["phone"] = phone_value
     _ensure_id_card_unique(db, data.get("id_card_no"))
+    _ensure_phone_unique(db, data.get("phone"))
     organization = organization_service.resolve_organization(
         db,
         data.get("organization_id"),
@@ -416,9 +524,31 @@ def create_expert(db: Session, payload: ExpertCreate) -> Expert:
     return expert
 
 
+def create_expert_public(db: Session, payload: ExpertPublicCreate) -> Expert:
+    data = payload.model_dump()
+    data["is_active"] = True
+    data["audit_status"] = AUDIT_STATUS_PENDING
+    return create_expert(db, ExpertCreate(**data))
+
+
 def update_expert(db: Session, expert_id: int, payload: ExpertUpdate) -> Expert:
     expert = get_expert(db, expert_id)
     update_data = payload.model_dump(exclude_unset=True)
+    if "audit_status" in update_data:
+        if update_data.get("audit_status") is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Audit status is required",
+            )
+        audit_value = _normalize_audit_status(
+            update_data.get("audit_status"), AUDIT_STATUS_PENDING
+        )
+        if audit_value not in ALLOWED_AUDIT_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid audit status",
+            )
+        update_data["audit_status"] = audit_value
     organization_input = (
         "organization_id" in update_data or "company" in update_data
     )
@@ -434,6 +564,16 @@ def update_expert(db: Session, expert_id: int, payload: ExpertUpdate) -> Expert:
                 detail="ID card is required",
             )
         _ensure_id_card_unique(db, update_data.get("id_card_no"), exclude_id=expert_id)
+    if "phone" in update_data:
+        phone_value = update_data.get("phone")
+        phone_value = str(phone_value).strip() if phone_value is not None else ""
+        if not phone_value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Phone is required",
+            )
+        update_data["phone"] = phone_value
+        _ensure_phone_unique(db, update_data.get("phone"), exclude_id=expert_id)
 
     if organization_input:
         if update_data.get("organization_id") is None and update_data.get("company") is None:
@@ -571,6 +711,7 @@ def import_experts(db: Session, file) -> dict[str, int]:
 
     created = 0
     skipped = 0
+    seen_phones: set[str] = set()
     try:
         for row_index, row in enumerate(rows, start=2):
             if not row or all(cell is None for cell in row):
@@ -589,10 +730,23 @@ def import_experts(db: Session, file) -> dict[str, int]:
             if not id_card_no:
                 skipped += 1
                 continue
+            phone = _coerce_str(data.get("phone"))
+            if not phone:
+                skipped += 1
+                continue
+            if phone in seen_phones:
+                skipped += 1
+                continue
             existing = db.execute(
                 select(Expert.id).where(Expert.id_card_no == id_card_no)
             ).first()
             if existing:
+                skipped += 1
+                continue
+            existing_phone = db.execute(
+                select(Expert.id).where(Expert.phone == phone)
+            ).first()
+            if existing_phone:
                 skipped += 1
                 continue
 
@@ -601,12 +755,16 @@ def import_experts(db: Session, file) -> dict[str, int]:
                 name=name,
                 id_card_no=id_card_no,
                 gender=_coerce_str(data.get("gender")),
-                phone=_coerce_str(data.get("phone")),
+                phone=phone,
                 company=_coerce_str(data.get("company")),
                 region=region_name,
                 title=_coerce_str(data.get("title")),
+                audit_status=_normalize_audit_status(
+                    data.get("audit_status"), AUDIT_STATUS_APPROVED
+                ),
                 is_active=_coerce_bool(data.get("is_active"), True),
             )
+            seen_phones.add(phone)
             organization = organization_service.resolve_organization(
                 db,
                 None,

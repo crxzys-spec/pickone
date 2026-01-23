@@ -641,7 +641,14 @@ def execute_draw(db: Session, draw_id: int) -> list[DrawResult]:
             detail="Rule is required",
         )
 
-    stmt = select(Expert).where(Expert.is_active.is_(True)).distinct()
+    stmt = (
+        select(Expert)
+        .where(
+            Expert.is_active.is_(True),
+            Expert.audit_status == expert_service.AUDIT_STATUS_APPROVED,
+        )
+        .distinct()
+    )
     specialty_ids = specialty_service.expand_to_leaf_ids(
         db, _unique_ints(rule.specialty_ids)
     )

@@ -1,7 +1,15 @@
+from enum import Enum
+
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.schemas.specialty import SpecialtyOut
 from app.schemas.pagination import PageParams
+
+
+class ExpertAuditStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
 
 
 class ExpertBase(BaseModel):
@@ -15,10 +23,27 @@ class ExpertBase(BaseModel):
     region: str | None = None
     title: str | None = None
     title_id: int | None = None
+    audit_status: ExpertAuditStatus = ExpertAuditStatus.approved
     is_active: bool = True
 
 
 class ExpertCreate(ExpertBase):
+    phone: str = Field(min_length=1)
+    specialty_ids: list[int] = Field(default_factory=list)
+    appointment_letter_urls: list[str] = Field(default_factory=list)
+
+
+class ExpertPublicCreate(BaseModel):
+    name: str = Field(min_length=1)
+    id_card_no: str = Field(min_length=1)
+    gender: str | None = None
+    phone: str = Field(min_length=1)
+    company: str | None = None
+    organization_id: int | None = None
+    region_id: int | None = None
+    region: str | None = None
+    title: str | None = None
+    title_id: int | None = None
     specialty_ids: list[int] = Field(default_factory=list)
     appointment_letter_urls: list[str] = Field(default_factory=list)
 
@@ -27,13 +52,14 @@ class ExpertUpdate(BaseModel):
     name: str | None = None
     id_card_no: str | None = Field(default=None, min_length=1)
     gender: str | None = None
-    phone: str | None = None
+    phone: str | None = Field(default=None, min_length=1)
     company: str | None = None
     organization_id: int | None = None
     region_id: int | None = None
     region: str | None = None
     title: str | None = None
     title_id: int | None = None
+    audit_status: ExpertAuditStatus | None = None
     is_active: bool | None = None
     specialty_ids: list[int] | None = None
     appointment_letter_urls: list[str] | None = None
@@ -94,3 +120,4 @@ class ExpertQuery(PageParams):
     specialty_id: int | None = None
     is_active: bool | None = None
     gender: str | None = None
+    audit_status: ExpertAuditStatus | None = None

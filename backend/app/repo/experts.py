@@ -41,6 +41,7 @@ class ExpertRepo(BaseRepo):
             "region": Expert.region,
             "title": Expert.title,
             "phone": Expert.phone,
+            "audit_status": Expert.audit_status,
             "is_active": Expert.is_active,
         }
         stmt = apply_sort(stmt, sort_by, sort_order, sort_map, Expert.id)
