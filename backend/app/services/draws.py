@@ -361,12 +361,12 @@ def export_results(db: Session, draw_id: int) -> BytesIO:
                 result.ordinal or "",
                 "是" if result.is_backup else "否",
                 "是" if result.is_replacement else "否",
-                expert.name if expert else "",
+                _mask_name(expert.name) if expert else "",
                 expert.company if expert else "",
                 specialty_names,
                 expert.title if expert else "",
-                expert.phone if expert else "",
-                expert.id_card_no if expert else "",
+                _mask_phone(expert.phone) if expert else "",
+                _mask_id_card(expert.id_card_no) if expert else "",
             ]
         )
 

@@ -883,11 +883,11 @@ def export_experts(db: Session) -> BytesIO:
             elif field == "appointment_letter_urls":
                 row.append(appointment_urls)
             elif field == "name":
-                row.append(_mask_name(expert.name))
+                row.append(expert.name)
             elif field == "id_card_no":
-                row.append(_mask_id_card(expert.id_card_no))
+                row.append(expert.id_card_no)
             elif field == "phone":
-                row.append(_mask_phone(expert.phone))
+                row.append(expert.phone)
             else:
                 row.append(getattr(expert, field, None))
         worksheet.append(row)
